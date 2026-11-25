@@ -1,19 +1,39 @@
-import { Room, Client } from "colyseus";
+import { Room, Client } from "@colyseus/core";
 import { GameState, Coin, Enemy, Bullet } from "./schema/GameState";
 import { Player } from "./schema/Player";
+import { verifyAuthToken, AuthTokenPayload } from "../auth/authService";
 
 const PLAYER_COLORS = [
   "#38bdf8", "#22c55e", "#eab308", "#f97316",
   "#ec4899", "#a855f7", "#06b6d4", "#10b981"
 ];
 
-interface MoveInput {
-  left: boolean;
-  right: boolean;
-  up: boolean;
-  down: boolean;
-  rotation?: number;
-  shooting?: boolean;
+const RESERVED_NAMES = ["sistem", "system", "admin", "moderator", "sunucu", "server"];
+
+function isValidFiniteNumber(val: unknown): val is number {
+  return typeof val === "number" && Number.isFinite(val);
+}
+
+function normalizeAngle(angle: number): number {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
+function sanitizeText(raw: unknown, maxLength: number): string {
+  if (typeof raw !== "string") return "";
+  return raw
+    .replace(/[\x00-\x1F\x7F<>]/g, "") // Strip control characters and angle brackets
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function sanitizePlayerName(raw: unknown, sessionId: string): string {
+  const cleaned = sanitizeText(raw, 15);
+  const lower = cleaned.toLowerCase();
+  if (!cleaned || RESERVED_NAMES.some((r) => lower === r || lower.startsWith(r))) {
+    return `Avcı_${sessionId.slice(0, 4)}`;
+  }
+  return cleaned;
 }
 
 export class GameRoom extends Room<GameState> {
@@ -23,37 +43,62 @@ export class GameRoom extends Room<GameState> {
   private nextBulletId = 1;
   private nextEnemyId = 1;
 
+  /**
+   * Anti-flood / DoS guard: max 140 packets/sec per client.
+   * Kicks clients exceeding 280 packets/sec.
+   */
+  private isPacketAllowed(client: Client, player: Player): boolean {
+    const now = Date.now();
+    if (now - player.packetWindowStart >= 1000) {
+      player.packetWindowStart = now;
+      player.packetCount = 0;
+    }
+    player.packetCount += 1;
+
+    if (player.packetCount > 280) {
+      console.warn(`Kick abusive flood client: ${client.sessionId}`);
+      client.leave(4001, "Rate limit exceeded");
+      return false;
+    }
+    return player.packetCount <= 140;
+  }
+
   onCreate(options: any) {
     this.setState(new GameState());
-
-    // Set room ID as shareable code for friends
     this.state.roomCode = this.roomId;
 
-    if (options?.gameMode === "pvp" || options?.gameMode === "coop") {
-      this.state.gameMode = options.gameMode;
+    if (options && typeof options === "object") {
+      if (options.gameMode === "pvp" || options.gameMode === "coop") {
+        this.state.gameMode = options.gameMode;
+      }
     }
 
-    // Populate initial coins
     for (let i = 0; i < 25; i++) {
       this.spawnCoin();
     }
 
-    // Spawn initial wave of enemies
     for (let i = 0; i < 6; i++) {
       this.spawnEnemy();
     }
 
-    // Movement & continuous shooting state
-    this.onMessage("move", (client: Client, data: MoveInput) => {
+    // 1. Movement & continuous shooting state (Strict input validation)
+    this.onMessage("move", (client: Client, data: unknown) => {
       const player = this.state.players.get(client.sessionId);
-      if (!player || player.isDead) return;
+      if (!player || !this.isPacketAllowed(client, player) || player.isDead) return;
+      if (!data || typeof data !== "object") return;
+
+      const payload = data as Record<string, unknown>;
+      const left = Boolean(payload.left);
+      const right = Boolean(payload.right);
+      const up = Boolean(payload.up);
+      const down = Boolean(payload.down);
 
       let dx = 0;
       let dy = 0;
-      if (data.left) dx -= 1;
-      if (data.right) dx += 1;
-      if (data.up) dy -= 1;
-      if (data.down) dy += 1;
+      if (left) dx -= 1;
+      if (right) dx += 1;
+      if (up) dy -= 1;
+      if (down) dy += 1;
 
       if (dx !== 0 && dy !== 0) {
         const factor = 1 / Math.SQRT2;
@@ -64,53 +109,85 @@ export class GameRoom extends Room<GameState> {
       player.vx = dx * player.speed;
       player.vy = dy * player.speed;
 
-      if (typeof data.rotation === "number") {
-        player.rotation = data.rotation;
+      if (isValidFiniteNumber(payload.rotation)) {
+        player.rotation = normalizeAngle(payload.rotation);
       }
-      if (typeof data.shooting === "boolean") {
-        player.isShooting = data.shooting;
+      if (typeof payload.shooting === "boolean") {
+        player.isShooting = payload.shooting;
       }
     });
 
-    // Single click shoot message
-    this.onMessage("shoot", (client: Client, rotation?: number) => {
+    // 2. Single click shoot message (Strict finite angle check)
+    this.onMessage("shoot", (client: Client, rotation: unknown) => {
       const player = this.state.players.get(client.sessionId);
-      if (!player || player.isDead) return;
-      if (typeof rotation === "number") {
-        player.rotation = rotation;
+      if (!player || !this.isPacketAllowed(client, player) || player.isDead) return;
+
+      if (isValidFiniteNumber(rotation)) {
+        player.rotation = normalizeAngle(rotation);
       }
       this.tryShoot(player);
     });
 
-    // Switch game mode (Co-op <-> PvP Friendly Fire)
-    this.onMessage("toggle_mode", (client: Client, mode?: string) => {
+    // 3. Switch game mode (Host authorization + Cooldown)
+    this.onMessage("toggle_mode", (client: Client, mode: unknown) => {
       const player = this.state.players.get(client.sessionId);
-      const newMode = mode === "pvp" || mode === "coop"
-        ? mode
-        : this.state.gameMode === "coop" ? "pvp" : "coop";
+      if (!player || !this.isPacketAllowed(client, player)) return;
+
+      // Authorization check: Only room host can toggle game mode
+      if (client.sessionId !== this.state.hostId) {
+        client.send("system_notice", {
+          text: "⚠️ Sadece Oda Sahibi (👑) oyun modunu değiştirebilir.",
+        });
+        return;
+      }
+
+      const now = Date.now();
+      if (now - player.lastModeToggleTime < 2000) {
+        return; // 2-second anti-spam cooldown
+      }
+      player.lastModeToggleTime = now;
+
+      const newMode =
+        mode === "pvp" || mode === "coop"
+          ? mode
+          : this.state.gameMode === "coop"
+            ? "pvp"
+            : "coop";
 
       this.state.gameMode = newMode;
 
-      const modeTitle = newMode === "pvp"
-        ? "⚔️ KAOS / PvP MODU: Arkadaşlar birbirini vurabilir!"
-        : "🛡️ İŞBİRLİĞİ (CO-OP) MODU: Dost ateşi kapalı, birlikte düşmanları avlayın!";
+      const modeTitle =
+        newMode === "pvp"
+          ? "⚔️ KAOS / PvP MODU: Arkadaşlar birbirini vurabilir!"
+          : "🛡️ İŞBİRLİĞİ (CO-OP) MODU: Dost ateşi kapalı, birlikte düşmanları avlayın!";
 
       this.broadcast("system_notice", {
-        text: `${player ? player.name : "Bir oyuncu"} oyun modunu değiştirdi: ${modeTitle}`,
-        mode: newMode
+        text: `👑 ${player.name} oyun modunu değiştirdi: ${modeTitle}`,
+        mode: newMode,
       });
     });
 
-    // Chat message listener
-    this.onMessage("chat", (client: Client, message: string) => {
+    // 4. Chat message listener (Sanitized + Rate-limited)
+    this.onMessage("chat", (client: Client, message: unknown) => {
       const player = this.state.players.get(client.sessionId);
-      if (!player) return;
+      if (!player || !this.isPacketAllowed(client, player)) return;
+
+      const now = Date.now();
+      if (now - player.lastChatTime < 750) {
+        return; // 750ms chat rate limit per player
+      }
+
+      const cleanText = sanitizeText(message, 80);
+      if (!cleanText) return;
+
+      player.lastChatTime = now;
+
       this.broadcast("chat", {
         id: client.sessionId,
         name: player.name,
         color: player.color,
-        text: String(message).slice(0, 100),
-        time: Date.now()
+        text: cleanText,
+        time: now,
       });
     });
 
@@ -122,13 +199,18 @@ export class GameRoom extends Room<GameState> {
     console.log(`Player joined room ${this.roomId}: ${client.sessionId}`);
     const player = new Player();
     player.id = client.sessionId;
-    player.name = options?.name ? String(options.name).slice(0, 15) : `Oyuncu_${client.sessionId.slice(0, 4)}`;
+    player.name = sanitizePlayerName(options?.name, client.sessionId);
     player.x = this.state.mapWidth / 2 + (Math.random() * 300 - 150);
     player.y = this.state.mapHeight / 2 + (Math.random() * 300 - 150);
     player.color = PLAYER_COLORS[this.state.players.size % PLAYER_COLORS.length];
     player.hp = 100;
     player.maxHp = 100;
     player.speed = 240;
+
+    // First player becomes the room host
+    if (!this.state.hostId || this.state.players.size === 0) {
+      this.state.hostId = client.sessionId;
+    }
 
     this.state.players.set(client.sessionId, player);
 
@@ -137,7 +219,7 @@ export class GameRoom extends Room<GameState> {
     });
   }
 
-  onLeave(client: Client, consented: boolean) {
+  onLeave(client: Client, _consented: boolean) {
     const player = this.state.players.get(client.sessionId);
     if (player) {
       this.broadcast("system_notice", {
@@ -145,27 +227,42 @@ export class GameRoom extends Room<GameState> {
       });
     }
     this.state.players.delete(client.sessionId);
+
+    // Reassign room host if the current host left
+    if (this.state.hostId === client.sessionId) {
+      const remainingIds = Array.from(this.state.players.keys());
+      this.state.hostId = remainingIds.length > 0 ? remainingIds[0] : "";
+      if (this.state.hostId) {
+        const newHost = this.state.players.get(this.state.hostId);
+        if (newHost) {
+          this.broadcast("system_notice", {
+            text: `👑 Yeni oda sahibi: ${newHost.name}`,
+          });
+        }
+      }
+    }
   }
 
   private tryShoot(player: Player) {
     const now = Date.now();
-    if (now - player.lastShootTime < 170) return; // Fire rate cooldown (170ms)
+    if (now - player.lastShootTime < 170) return;
     player.lastShootTime = now;
+
+    const rot = isValidFiniteNumber(player.rotation) ? player.rotation : 0;
 
     const bullet = new Bullet();
     bullet.id = `b_${this.nextBulletId++}`;
     bullet.ownerId = player.id;
-    bullet.rotation = player.rotation;
+    bullet.rotation = rot;
     bullet.color = player.color;
 
-    // Spawn slightly in front of the player barrel
     const muzzleDist = 28;
-    bullet.x = player.x + Math.cos(player.rotation) * muzzleDist;
-    bullet.y = player.y + Math.sin(player.rotation) * muzzleDist;
+    bullet.x = player.x + Math.cos(rot) * muzzleDist;
+    bullet.y = player.y + Math.sin(rot) * muzzleDist;
 
     const bulletSpeed = 760;
-    bullet.vx = Math.cos(player.rotation) * bulletSpeed;
-    bullet.vy = Math.sin(player.rotation) * bulletSpeed;
+    bullet.vx = Math.cos(rot) * bulletSpeed;
+    bullet.vy = Math.sin(rot) * bulletSpeed;
     bullet.damage = 20;
     bullet.createdAt = now;
 
@@ -189,7 +286,6 @@ export class GameRoom extends Room<GameState> {
     const enemy = new Enemy();
     enemy.id = `e_${this.nextEnemyId++}`;
 
-    // Pick enemy type based on wave and randomness
     const roll = Math.random();
     if (this.state.wave >= 2 && roll < 0.16) {
       enemy.type = "tank";
@@ -214,7 +310,6 @@ export class GameRoom extends Room<GameState> {
       enemy.damage = 15;
     }
 
-    // Spawn around a random living player at safe distance (550 - 800px away), or map edges
     const livingPlayers: Player[] = [];
     this.state.players.forEach((p) => {
       if (!p.isDead) livingPlayers.push(p);
@@ -245,7 +340,7 @@ export class GameRoom extends Room<GameState> {
     this.broadcast("kill_feed", {
       victimName: victim.name,
       killerName: killerName,
-      time: Date.now()
+      time: Date.now(),
     });
   }
 
@@ -253,32 +348,31 @@ export class GameRoom extends Room<GameState> {
     const dt = deltaTime / 1000;
     const now = Date.now();
 
-    // 1. Wave & Enemy Spawn Timers
     if (this.state.players.size > 0) {
       this.enemySpawnTimer += dt;
       this.waveTimer += dt;
 
-      const spawnInterval = Math.max(0.6, 2.2 - this.state.wave * 0.15 - this.state.players.size * 0.2);
+      const spawnInterval = Math.max(
+        0.6,
+        2.2 - this.state.wave * 0.15 - this.state.players.size * 0.2
+      );
       if (this.enemySpawnTimer >= spawnInterval) {
         this.enemySpawnTimer = 0;
         this.spawnEnemy();
       }
 
-      // Advance wave every 30 seconds
       if (this.waveTimer >= 30) {
         this.waveTimer = 0;
         this.state.wave += 1;
         this.broadcast("system_notice", {
           text: `🔥 DALGA ${this.state.wave} BAŞLADI! Düşmanlar güçleniyor!`,
         });
-        // Burst spawn for the new wave
         for (let i = 0; i < 3 + this.state.players.size; i++) {
           this.spawnEnemy();
         }
       }
     }
 
-    // 2. Update Players
     const livingPlayers: Player[] = [];
     this.state.players.forEach((player) => {
       if (player.isDead) {
@@ -298,16 +392,13 @@ export class GameRoom extends Room<GameState> {
       player.x += player.vx * dt;
       player.y += player.vy * dt;
 
-      // Map bounds
       player.x = Math.max(25, Math.min(this.state.mapWidth - 25, player.x));
       player.y = Math.max(25, Math.min(this.state.mapHeight - 25, player.y));
 
-      // Continuous shooting
       if (player.isShooting) {
         this.tryShoot(player);
       }
 
-      // Coin collection (restores HP + adds score)
       this.state.coins.forEach((coin, coinId) => {
         const dx = player.x - coin.x;
         const dy = player.y - coin.y;
@@ -322,13 +413,11 @@ export class GameRoom extends Room<GameState> {
       });
     });
 
-    // 3. Update Bullets & Check Collisions
     const bulletsToRemove: string[] = [];
     this.state.bullets.forEach((bullet, bulletId) => {
       bullet.x += bullet.vx * dt;
       bullet.y += bullet.vy * dt;
 
-      // Remove out-of-bounds or expired bullets (1.3s lifetime)
       if (
         now - bullet.createdAt > 1300 ||
         bullet.x < 0 ||
@@ -342,7 +431,6 @@ export class GameRoom extends Room<GameState> {
 
       let hit = false;
 
-      // 3a. Bullet vs Enemies
       this.state.enemies.forEach((enemy, enemyId) => {
         if (hit) return;
         const dx = bullet.x - enemy.x;
@@ -353,21 +441,18 @@ export class GameRoom extends Room<GameState> {
           enemy.hp -= bullet.damage;
 
           if (enemy.hp <= 0) {
-            // Enemy killed!
             const reward = enemy.type === "tank" ? 50 : enemy.type === "fast" ? 25 : 15;
             const shooter = this.state.players.get(bullet.ownerId);
             if (shooter) {
               shooter.score += reward;
               shooter.kills += 1;
             }
-            // Drop coin orb where enemy died
             this.spawnCoin(enemy.x, enemy.y, reward);
             this.state.enemies.delete(enemyId);
           }
         }
       });
 
-      // 3b. Bullet vs Other Players (ONLY IN PvP MODE!)
       if (!hit && this.state.gameMode === "pvp") {
         this.state.players.forEach((targetPlayer, targetId) => {
           if (hit || targetId === bullet.ownerId || targetPlayer.isDead) return;
@@ -397,14 +482,12 @@ export class GameRoom extends Room<GameState> {
       this.state.bullets.delete(bId);
     }
 
-    // 4. Update Enemies (Chase nearest living player + attack on contact)
     const enemyList: Enemy[] = [];
     this.state.enemies.forEach((e) => enemyList.push(e));
 
     for (let i = 0; i < enemyList.length; i++) {
       const enemy = enemyList[i];
 
-      // Find nearest living player
       let nearestPlayer: Player | null = null;
       let minDistSq = Infinity;
 
@@ -424,7 +507,6 @@ export class GameRoom extends Room<GameState> {
         enemy.x += Math.cos(angle) * enemy.speed * dt;
         enemy.y += Math.sin(angle) * enemy.speed * dt;
 
-        // Check melee damage on contact
         const contactDist = enemy.radius + 22;
         if (minDistSq < contactDist * contactDist) {
           if (now - nearestPlayer.lastDamageTime > 600) {
@@ -433,14 +515,17 @@ export class GameRoom extends Room<GameState> {
 
             if (nearestPlayer.hp <= 0) {
               const enemyLabel =
-                enemy.type === "tank" ? "👾 Boss Düşman" : enemy.type === "fast" ? "⚡ Hızlı Düşman" : "🧟 Zombi Düşman";
+                enemy.type === "tank"
+                  ? "👾 Boss Düşman"
+                  : enemy.type === "fast"
+                    ? "⚡ Hızlı Düşman"
+                    : "🧟 Zombi Düşman";
               this.killPlayer(nearestPlayer, enemyLabel);
             }
           }
         }
       }
 
-      // Soft separation between enemies so they don't overlap into a single dot
       for (let j = i + 1; j < enemyList.length; j++) {
         const other = enemyList[j];
         const dx = enemy.x - other.x;

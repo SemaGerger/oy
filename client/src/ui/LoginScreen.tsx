@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { Gamepad2, Play, Sparkles, Shield, Swords, Users, PlusCircle } from "lucide-react";
+import { Gamepad2, Play, Sparkles, Shield, Swords, Users, PlusCircle, ArrowLeft } from "lucide-react";
 import { JoinOptions } from "../network/client";
 
 interface LoginScreenProps {
   onJoin: (options: JoinOptions) => void;
   isLoading: boolean;
   error?: string | null;
+  onBackToPortal?: () => void;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onJoin, isLoading, error }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({
+  onJoin,
+  isLoading,
+  error,
+  onBackToPortal,
+}) => {
   const [name, setName] = useState(
     `Avcı_${Math.floor(100 + Math.random() * 900)}`
   );
@@ -19,7 +25,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onJoin, isLoading, err
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const codeFromUrl = params.get("room");
-    if (codeFromUrl) {
+    if (codeFromUrl && /^[a-zA-Z0-9_-]{1,24}$/.test(codeFromUrl)) {
       setRoomCode(codeFromUrl);
       setJoinTab("friend");
     }
@@ -39,13 +45,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onJoin, isLoading, err
   return (
     <div style={styles.container}>
       <div style={styles.card}>
+        {onBackToPortal && (
+          <button type="button" onClick={onBackToPortal} style={styles.backPortalBtn}>
+            <ArrowLeft size={15} /> Tüm Oyunlara Dön (Poki Portal)
+          </button>
+        )}
+
         <div style={styles.logoRow}>
           <div style={styles.iconCircle}>
             <Gamepad2 size={32} color="#38bdf8" />
           </div>
           <div>
             <h1 style={styles.title}>SURVIVAL ARENA 2D</h1>
-            <p style={styles.subtitle}>Düşman Dalgaları • Arkadaşlarla Co-op veya PvP</p>
+            <p style={styles.subtitle}>1. Oyun • Düşman Dalgaları & Arkadaşlarla Co-op / PvP</p>
           </div>
         </div>
 
@@ -183,6 +195,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onJoin, isLoading, err
             )}
           </div>
         </form>
+
+        {/* How to Play Box */}
+        <div style={styles.howToPlay}>
+          <div style={styles.howToTitle}>🎮 NASIL OYNANIR?</div>
+          <div style={styles.howToGrid}>
+            <div>🏃 <b>Hareket:</b> <span style={styles.keyTag}>W A S D</span> veya <span style={styles.keyTag}>Ok Tuşları</span></div>
+            <div>🎯 <b>Nişan & Ateş:</b> <span style={styles.keyTag}>Mouse</span> ile nişan al, <span style={styles.keyTag}>Sol Tık</span> / <span style={styles.keyTag}>Boşluk</span> ile ateş et</div>
+            <div>👾 <b>Amaç:</b> Üzerine gelen kırmızı/turuncu/mor düşmanları sana değmeden vur!</div>
+            <div>💚 <b>Can & Puan:</b> Yerdeki sarı/yeşil küreleri toplayarak canını (+8 HP) doldur.</div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -209,6 +232,20 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "20px",
+  },
+  backPortalBtn: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(15, 23, 42, 0.7)",
+    border: "1px solid rgba(56, 189, 248, 0.35)",
+    color: "#38bdf8",
+    borderRadius: "10px",
+    padding: "6px 12px",
+    fontSize: "12px",
+    fontWeight: 700,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
   },
   logoRow: {
     display: "flex",
@@ -335,5 +372,35 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "8px 12px",
     borderRadius: "8px",
     border: "1px solid rgba(239, 68, 68, 0.2)",
+  },
+  howToPlay: {
+    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    border: "1px solid rgba(56, 189, 248, 0.25)",
+    borderRadius: "12px",
+    padding: "12px 14px",
+  },
+  howToTitle: {
+    fontSize: "12px",
+    fontWeight: "bold",
+    color: "#38bdf8",
+    marginBottom: "8px",
+    letterSpacing: "0.5px",
+  },
+  howToGrid: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    fontSize: "12px",
+    color: "#cbd5e1",
+    lineHeight: 1.4,
+  },
+  keyTag: {
+    backgroundColor: "#1e293b",
+    border: "1px solid #475569",
+    borderRadius: "4px",
+    padding: "1px 5px",
+    fontSize: "11px",
+    color: "#facc15",
+    fontWeight: 600,
   },
 };

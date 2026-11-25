@@ -61,12 +61,17 @@ export class GameScene extends Phaser.Scene {
     shooting: false,
   };
 
-  constructor() {
+  constructor(room?: Room) {
     super("GameScene");
+    if (room) {
+      this.room = room;
+    }
   }
 
-  init(data: { room: Room }) {
-    this.room = data.room;
+  init(data?: { room?: Room }) {
+    if (data && data.room) {
+      this.room = data.room;
+    }
   }
 
   create() {
@@ -98,10 +103,12 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    const mapW = this.room?.state.mapWidth || 2200;
-    const mapH = this.room?.state.mapHeight || 2200;
+    const mapW = this.room?.state?.mapWidth || 2200;
+    const mapH = this.room?.state?.mapHeight || 2200;
 
     this.drawBackground(mapW, mapH);
+    this.cameras.main.centerOn(mapW / 2, mapH / 2);
+
     this.setupRoomListeners();
 
     EventBus.emit("current-scene-ready", this);
@@ -136,6 +143,18 @@ export class GameScene extends Phaser.Scene {
   private setupRoomListeners() {
     if (!this.room) return;
 
+    if (this.room.state && this.room.state.players && typeof this.room.state.players.onAdd === "function") {
+      this.bindSchemaListeners();
+    } else {
+      this.room.onStateChange.once(() => {
+        this.bindSchemaListeners();
+      });
+    }
+  }
+
+  private bindSchemaListeners() {
+    if (!this.room || !this.room.state) return;
+
     // Room state top-level changes (wave, gameMode, roomCode)
     this.room.state.onChange(() => {
       this.emitGameInfo();
@@ -143,6 +162,7 @@ export class GameScene extends Phaser.Scene {
 
     // 1. Players
     this.room.state.players.onAdd((player: any, sessionId: string) => {
+      if (this.playerVisuals.has(sessionId)) return;
       const isLocal = sessionId === this.room?.sessionId;
       const visual = this.createPlayerVisual(player, isLocal);
       this.playerVisuals.set(sessionId, visual);
@@ -491,6 +511,7 @@ export class GameScene extends Phaser.Scene {
       wave: this.room.state.wave || 1,
       gameMode: this.room.state.gameMode || "coop",
       roomCode: this.room.roomId,
+      hostId: this.room.state.hostId || "",
       enemyCount: this.room.state.enemies ? this.room.state.enemies.size : 0,
     });
   }

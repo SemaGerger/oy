@@ -3,6 +3,8 @@ import { GameScene } from "./scenes/GameScene";
 import { Room } from "colyseus.js";
 
 export const createPhaserGame = (parent: HTMLElement, room: Room): Phaser.Game => {
+  const gameScene = new GameScene(room);
+
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
     parent: parent,
@@ -20,10 +22,8 @@ export const createPhaserGame = (parent: HTMLElement, room: Room): Phaser.Game =
         debug: false,
       },
     },
-    scene: [GameScene],
+    scene: [gameScene],
   };
 
-  const game = new Phaser.Game(config);
-  game.scene.start("GameScene", { room });
-  return game;
+  return new Phaser.Game(config);
 };

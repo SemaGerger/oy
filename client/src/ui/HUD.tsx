@@ -33,6 +33,7 @@ interface GameInfo {
   wave: number;
   gameMode: "coop" | "pvp";
   roomCode: string;
+  hostId?: string;
   enemyCount: number;
 }
 
@@ -53,14 +54,16 @@ interface KillFeedItem {
 
 interface HUDProps {
   room: Room;
+  onBackToPortal?: () => void;
 }
 
-export const HUD: React.FC<HUDProps> = ({ room }) => {
+export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
   const [gameInfo, setGameInfo] = useState<GameInfo>({
     wave: 1,
     gameMode: "coop",
     roomCode: room.roomId,
+    hostId: "",
     enemyCount: 0,
   });
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -133,6 +136,7 @@ export const HUD: React.FC<HUDProps> = ({ room }) => {
 
   const localPlayer = players.find((p) => p.isLocal);
   const isPvp = gameInfo.gameMode === "pvp";
+  const isHost = !gameInfo.hostId || gameInfo.hostId === room.sessionId;
 
   return (
     <div style={styles.overlay}>
@@ -151,8 +155,18 @@ export const HUD: React.FC<HUDProps> = ({ room }) => {
 
       {/* Top Bar */}
       <div style={styles.topBar}>
-        {/* Left: Wave, Enemy Count, Mode Switcher & Friend Invite */}
+        {/* Left: Poki Portal Home Button, Wave, Enemy Count, Mode Switcher & Friend Invite */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          {onBackToPortal && (
+            <button
+              onClick={onBackToPortal}
+              style={styles.portalHomeBtn}
+              title="Odadan ayrıl ve Poki Oyun Portalına dön"
+            >
+              🏠 POKI PORTAL
+            </button>
+          )}
+
           <div style={styles.badge}>
             <Flame size={16} color="#f97316" />
             <span style={{ fontWeight: 800, color: "#f97316" }}>DALGA {gameInfo.wave}</span>
@@ -172,8 +186,13 @@ export const HUD: React.FC<HUDProps> = ({ room }) => {
               ...styles.modeToggleBtn,
               backgroundColor: isPvp ? "rgba(239, 68, 68, 0.85)" : "rgba(34, 197, 94, 0.85)",
               borderColor: isPvp ? "#f87171" : "#4ade80",
+              cursor: isHost ? "pointer" : "not-allowed",
             }}
-            title="Oyun modunu değiştirmek için tıkla"
+            title={
+              isHost
+                ? "Oda sahibi olarak oyun modunu değiştirmek için tıkla"
+                : "Sadece Oda Sahibi (👑) oyun modunu değiştirebilir"
+            }
           >
             {isPvp ? <Swords size={15} /> : <Shield size={15} />}
             <span>
@@ -181,7 +200,7 @@ export const HUD: React.FC<HUDProps> = ({ room }) => {
                 ? "MOD: KAOS / PvP (Arkadaşları Vurma Açık)"
                 : "MOD: CO-OP (Birlikte Düşmanlara Karşı)"}
             </span>
-            <span style={styles.switchTag}>Değiştir</span>
+            {isHost && <span style={styles.switchTag}>👑 Değiştir</span>}
           </button>
 
           {/* Invite Friend Button */}
@@ -402,6 +421,18 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     flexWrap: "wrap",
     gap: "10px",
+  },
+  portalHomeBtn: {
+    pointerEvents: "auto",
+    background: "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)",
+    color: "#0f172a",
+    border: "none",
+    borderRadius: "12px",
+    padding: "8px 14px",
+    fontSize: "12px",
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 4px 12px rgba(56, 189, 248, 0.35)",
   },
   badge: {
     pointerEvents: "auto",
