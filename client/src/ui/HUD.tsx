@@ -161,9 +161,9 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
             <button
               onClick={onBackToPortal}
               style={styles.portalHomeBtn}
-              title="Odadan ayrıl ve Poki Oyun Portalına dön"
+              title="Odadan ayrıl ve Sitecont Game ana sayfasına dön"
             >
-              🏠 POKI PORTAL
+              🏠 SITECONT GAME
             </button>
           )}
 

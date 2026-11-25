@@ -29,8 +29,8 @@ export const PortalHome: React.FC<PortalHomeProps> = ({ user, onSelectGame, onLo
             <Gamepad2 size={26} color="#ffffff" />
           </div>
           <div>
-            <span style={styles.brandTitle}>POKI</span>
-            <span style={styles.brandAccent}>ARENA</span>
+            <span style={styles.brandTitle}>SITECONT</span>
+            <span style={styles.brandAccent}>GAME</span>
           </div>
         </div>
 

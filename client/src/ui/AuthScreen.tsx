@@ -125,7 +125,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
           </div>
           <div>
             <h1 style={styles.title}>
-              POKI <span style={{ color: "#38bdf8" }}>ARENA</span>
+              SITECONT <span style={{ color: "#38bdf8" }}>GAME</span>
             </h1>
             <p style={styles.subtitle}>Oynamak için güvenli hesabınızla giriş yapın</p>
           </div>

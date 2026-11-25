@@ -1,7 +1,10 @@
 import { Client, Room } from "colyseus.js";
 
-const SERVER_URL =
-  window.location.protocol === "https:"
+const envServerUrl = ((import.meta as any).env?.VITE_SERVER_URL as string | undefined)?.trim();
+
+const SERVER_URL = envServerUrl
+  ? envServerUrl.replace(/\/+$/, "").replace(/^http:/i, "ws:").replace(/^https:/i, "wss:")
+  : window.location.protocol === "https:"
     ? `wss://${window.location.hostname}:2567`
     : `ws://${window.location.hostname}:2567`;
 

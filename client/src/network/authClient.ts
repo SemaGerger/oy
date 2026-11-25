@@ -11,8 +11,11 @@ export interface AuthResponse {
   error?: string;
 }
 
-const API_BASE =
-  window.location.protocol === "https:"
+const envServerUrl = ((import.meta as any).env?.VITE_SERVER_URL as string | undefined)?.trim();
+
+const API_BASE = envServerUrl
+  ? envServerUrl.replace(/\/+$/, "")
+  : window.location.protocol === "https:"
     ? `https://${window.location.hostname}:2567`
     : `http://${window.location.hostname}:2567`;
 

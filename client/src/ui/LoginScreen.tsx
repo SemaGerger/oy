@@ -58,7 +58,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       <div style={styles.card}>
         {onBackToPortal && (
           <button type="button" onClick={onBackToPortal} style={styles.backPortalBtn}>
-            <ArrowLeft size={15} /> Poki Portal Ana Sayfasına Dön
+            <ArrowLeft size={15} /> Sitecont Game Ana Sayfasına Dön
           </button>
         )}
 
