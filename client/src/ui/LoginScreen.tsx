@@ -1,8 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { Gamepad2, Play, Sparkles, Shield, Swords, Users, PlusCircle, ArrowLeft } from "lucide-react";
+import {
+  Gamepad2,
+  Play,
+  Sparkles,
+  Shield,
+  Swords,
+  Users,
+  PlusCircle,
+  ArrowLeft,
+  UserCheck,
+} from "lucide-react";
 import { JoinOptions } from "../network/client";
+import { AuthUser } from "../network/authClient";
 
 interface LoginScreenProps {
+  user: AuthUser;
+  token: string;
   onJoin: (options: JoinOptions) => void;
   isLoading: boolean;
   error?: string | null;
@@ -10,14 +23,13 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
+  user,
+  token,
   onJoin,
   isLoading,
   error,
   onBackToPortal,
 }) => {
-  const [name, setName] = useState(
-    `Avcı_${Math.floor(100 + Math.random() * 900)}`
-  );
   const [gameMode, setGameMode] = useState<"coop" | "pvp">("coop");
   const [roomCode, setRoomCode] = useState("");
   const [joinTab, setJoinTab] = useState<"public" | "friend">("public");
@@ -33,9 +45,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
   const handleSubmit = (e: React.FormEvent, createNew: boolean = false) => {
     e.preventDefault();
-    if (!name.trim()) return;
     onJoin({
-      playerName: name.trim(),
+      token,
       gameMode,
       roomCode: joinTab === "friend" ? roomCode.trim() : undefined,
       createNew,
@@ -47,7 +58,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       <div style={styles.card}>
         {onBackToPortal && (
           <button type="button" onClick={onBackToPortal} style={styles.backPortalBtn}>
-            <ArrowLeft size={15} /> Tüm Oyunlara Dön (Poki Portal)
+            <ArrowLeft size={15} /> Poki Portal Ana Sayfasına Dön
           </button>
         )}
 
@@ -57,29 +68,23 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
           <div>
             <h1 style={styles.title}>SURVIVAL ARENA 2D</h1>
-            <p style={styles.subtitle}>1. Oyun • Düşman Dalgaları & Arkadaşlarla Co-op / PvP</p>
+            <p style={styles.subtitle}>1. Oyun • Engeller, Düşman Dalgaları & Co-op / PvP</p>
           </div>
         </div>
 
-        <form onSubmit={(e) => handleSubmit(e, false)} style={styles.form}>
-          {/* Player Name */}
-          <div>
-            <label style={styles.label}>Oyuncu Adınız</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={15}
-              placeholder="Adınızı girin..."
-              disabled={isLoading}
-              style={styles.input}
-              autoFocus
-            />
-          </div>
+        {/* Verified Account Badge */}
+        <div style={styles.verifiedRow}>
+          <UserCheck size={16} color="#22c55e" />
+          <span style={{ color: "#94a3b8", fontSize: "12px" }}>Giriş Yapılan Hesap:</span>
+          <span style={{ color: "#ffffff", fontWeight: 800, fontSize: "13px" }}>
+            {user.username}
+          </span>
+        </div>
 
+        <form onSubmit={(e) => handleSubmit(e, false)} style={styles.form}>
           {/* Game Mode Selection */}
           <div>
-            <label style={styles.label}>Oyun Modu Seçin (Oyun içinde de değiştirilebilir)</label>
+            <label style={styles.label}>Oyun Modu Seçin (Oda sahibi oyun içinde değiştirebilir)</label>
             <div style={styles.modeGrid}>
               <div
                 onClick={() => setGameMode("coop")}
@@ -202,8 +207,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           <div style={styles.howToGrid}>
             <div>🏃 <b>Hareket:</b> <span style={styles.keyTag}>W A S D</span> veya <span style={styles.keyTag}>Ok Tuşları</span></div>
             <div>🎯 <b>Nişan & Ateş:</b> <span style={styles.keyTag}>Mouse</span> ile nişan al, <span style={styles.keyTag}>Sol Tık</span> / <span style={styles.keyTag}>Boşluk</span> ile ateş et</div>
-            <div>👾 <b>Amaç:</b> Üzerine gelen kırmızı/turuncu/mor düşmanları sana değmeden vur!</div>
-            <div>💚 <b>Can & Puan:</b> Yerdeki sarı/yeşil küreleri toplayarak canını (+8 HP) doldur.</div>
+            <div>🪨 <b>Siper Al:</b> Etraftaki kayalar, metal duvarlar ve enerji sütunları mermileri durdurur!</div>
+            <div>💚 <b>Can & Puan:</b> Sarı/yeşil küreleri toplayarak canını (+8 HP) doldur.</div>
           </div>
         </div>
       </div>
@@ -221,17 +226,17 @@ const styles: Record<string, React.CSSProperties> = {
     background: "radial-gradient(circle at center, #1e293b 0%, #090d16 100%)",
   },
   card: {
-    width: "460px",
+    width: "470px",
     maxWidth: "94vw",
-    backgroundColor: "rgba(30, 41, 59, 0.78)",
+    backgroundColor: "rgba(30, 41, 59, 0.82)",
     backdropFilter: "blur(16px)",
     border: "1px solid rgba(255, 255, 255, 0.12)",
     borderRadius: "20px",
-    padding: "28px",
+    padding: "26px",
     boxShadow: "0 20px 50px rgba(0, 0, 0, 0.6)",
     display: "flex",
     flexDirection: "column",
-    gap: "20px",
+    gap: "18px",
   },
   backPortalBtn: {
     alignSelf: "flex-start",
@@ -250,11 +255,11 @@ const styles: Record<string, React.CSSProperties> = {
   logoRow: {
     display: "flex",
     alignItems: "center",
-    gap: "16px",
+    gap: "14px",
   },
   iconCircle: {
-    width: "54px",
-    height: "54px",
+    width: "52px",
+    height: "52px",
     borderRadius: "16px",
     backgroundColor: "rgba(56, 189, 248, 0.15)",
     display: "flex",
@@ -274,10 +279,19 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "12px",
     color: "#94a3b8",
   },
+  verifiedRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    backgroundColor: "rgba(34, 197, 94, 0.12)",
+    border: "1px solid rgba(34, 197, 94, 0.3)",
+    borderRadius: "10px",
+    padding: "9px 12px",
+  },
   form: {
     display: "flex",
     flexDirection: "column",
-    gap: "16px",
+    gap: "14px",
   },
   label: {
     fontSize: "12px",

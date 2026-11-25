@@ -194,11 +194,12 @@ export class GameRoom extends Room<GameState> {
     this.setSimulationInterval((deltaTime) => this.update(deltaTime), 1000 / 50);
   }
 
-  onJoin(client: Client, _options: any, auth: AuthTokenPayload) {
-    console.log(`Authenticated player joined room ${this.roomId}: ${auth.username}`);
+  onJoin(client: Client, _options?: any, auth?: AuthTokenPayload) {
+    const username = auth?.username || `Avcı_${client.sessionId.slice(0, 4)}`;
+    console.log(`Authenticated player joined room ${this.roomId}: ${username}`);
     const player = new Player();
     player.id = client.sessionId;
-    player.name = auth.username; // Verified from HMAC token
+    player.name = username; // Verified from HMAC token
     const spawnPos = this.findSafePosition(26, true);
     player.x = spawnPos.x;
     player.y = spawnPos.y;

@@ -42,6 +42,7 @@ export class GameScene extends Phaser.Scene {
   private enemyVisuals: Map<string, EnemyVisual> = new Map();
   private bulletVisuals: Map<string, BulletVisual> = new Map();
   private coinVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
+  private obstacleVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasdKeys!: {
@@ -115,27 +116,57 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawBackground(mapW: number, mapH: number) {
-    const grid = this.add.graphics();
-    grid.lineStyle(1, 0x1e293b, 0.85);
+    const bg = this.add.graphics();
+    bg.setDepth(0);
 
+    // Subtle dark tactical arena floor base
+    bg.fillStyle(0x0b1120, 1);
+    bg.fillRect(0, 0, mapW, mapH);
+
+    // Subtle checkerboard sector tiles for depth
+    bg.fillStyle(0x0f172a, 0.45);
+    const tileSize = 192;
+    for (let x = 0; x < mapW; x += tileSize) {
+      for (let y = 0; y < mapH; y += tileSize) {
+        if (((x / tileSize) + (y / tileSize)) % 2 === 0) {
+          bg.fillRect(x, y, tileSize, tileSize);
+        }
+      }
+    }
+
+    // Crisp tactical grid lines
+    bg.lineStyle(1, 0x1e293b, 0.7);
     const gridSize = 64;
     for (let x = 0; x <= mapW; x += gridSize) {
-      grid.moveTo(x, 0);
-      grid.lineTo(x, mapH);
+      bg.moveTo(x, 0);
+      bg.lineTo(x, mapH);
     }
     for (let y = 0; y <= mapH; y += gridSize) {
-      grid.moveTo(0, y);
-      grid.lineTo(mapW, y);
+      bg.moveTo(0, y);
+      bg.lineTo(mapW, y);
     }
-    grid.strokePath();
+    bg.strokePath();
 
-    // Arena center circle decoration
-    grid.lineStyle(2, 0x1e293b, 0.9);
-    grid.strokeCircle(mapW / 2, mapH / 2, 220);
+    // Arena center tactical rings
+    const cx = mapW / 2;
+    const cy = mapH / 2;
+    bg.fillStyle(0x0ea5e9, 0.04);
+    bg.fillCircle(cx, cy, 240);
+    bg.lineStyle(2, 0x38bdf8, 0.35);
+    bg.strokeCircle(cx, cy, 240);
+    bg.lineStyle(1.5, 0x38bdf8, 0.2);
+    bg.strokeCircle(cx, cy, 420);
 
-    // Arena boundary
-    grid.lineStyle(5, 0xef4444, 0.9);
-    grid.strokeRect(0, 0, mapW, mapH);
+    // Crosshair sector lines through center
+    bg.lineStyle(1, 0x38bdf8, 0.14);
+    bg.lineBetween(cx, 0, cx, mapH);
+    bg.lineBetween(0, cy, mapW, cy);
+
+    // Outer danger zone boundary glow
+    bg.lineStyle(12, 0xef4444, 0.18);
+    bg.strokeRect(6, 6, mapW - 12, mapH - 12);
+    bg.lineStyle(4, 0xef4444, 0.95);
+    bg.strokeRect(0, 0, mapW, mapH);
 
     this.cameras.main.setBounds(0, 0, mapW, mapH);
   }
@@ -276,6 +307,90 @@ export class GameScene extends Phaser.Scene {
         this.coinVisuals.delete(id);
       }
     });
+
+    // 5. Obstacles (Rocks, Armored Bunker Walls, Energy Pillars)
+    if (this.room.state.obstacles && typeof this.room.state.obstacles.onAdd === "function") {
+      this.room.state.obstacles.onAdd((obs: any, id: string) => {
+        if (this.obstacleVisuals.has(id)) return;
+        const visual = this.createObstacleVisual(obs);
+        this.obstacleVisuals.set(id, visual);
+      });
+
+      this.room.state.obstacles.onRemove((_obs: any, id: string) => {
+        const visual = this.obstacleVisuals.get(id);
+        if (visual) {
+          visual.destroy();
+          this.obstacleVisuals.delete(id);
+        }
+      });
+    }
+  }
+
+  private createObstacleVisual(obs: any): Phaser.GameObjects.Container {
+    const container = this.add.container(obs.x, obs.y);
+    container.setDepth(12);
+
+    const r = obs.radius || 42;
+
+    // Ground drop shadow for 3D depth
+    const shadow = this.add.circle(6, 8, r + 3, 0x000000, 0.45);
+    container.add(shadow);
+
+    if (obs.type === "pillar") {
+      // Glowing Cyber Energy Pillar
+      const outerAura = this.add.circle(0, 0, r + 6, 0x38bdf8, 0.14);
+      const base = this.add.circle(0, 0, r, 0x1e293b, 1);
+      base.setStrokeStyle(3, 0x38bdf8, 0.9);
+
+      const midRing = this.add.circle(0, 0, r * 0.65, 0x0f172a, 1);
+      midRing.setStrokeStyle(2, 0x818cf8, 0.8);
+
+      const core = this.add.circle(0, 0, r * 0.34, 0x38bdf8, 0.95);
+      const innerSpark = this.add.circle(0, 0, r * 0.16, 0xffffff, 1);
+
+      container.add([outerAura, base, midRing, core, innerSpark]);
+
+      this.tweens.add({
+        targets: [outerAura, core],
+        scale: 1.12,
+        alpha: 0.65,
+        yoyo: true,
+        repeat: -1,
+        duration: 1300,
+        ease: "Sine.easeInOut",
+      });
+    } else if (obs.type === "wall") {
+      // Armored Tactical Bunker Block
+      const size = r * 1.65;
+      const plate = this.add.rectangle(0, 0, size, size, 0x334155, 1);
+      plate.setStrokeStyle(3, 0x64748b, 1);
+
+      const innerPlate = this.add.rectangle(0, 0, size * 0.68, size * 0.68, 0x1e293b, 1);
+      innerPlate.setStrokeStyle(2, 0xf59e0b, 0.75);
+
+      const centerDot = this.add.rectangle(0, 0, size * 0.22, size * 0.22, 0xf59e0b, 0.85);
+
+      // Corner rivets
+      const offset = size * 0.38;
+      const r1 = this.add.circle(-offset, -offset, 3, 0x94a3b8);
+      const r2 = this.add.circle(offset, -offset, 3, 0x94a3b8);
+      const r3 = this.add.circle(-offset, offset, 3, 0x94a3b8);
+      const r4 = this.add.circle(offset, offset, 3, 0x94a3b8);
+
+      container.add([plate, innerPlate, centerDot, r1, r2, r3, r4]);
+    } else {
+      // Chiseled 2D Top-Down Boulder / Rock
+      const rockBase = this.add.circle(0, 0, r, 0x475569, 1);
+      rockBase.setStrokeStyle(3, 0x1e293b, 1);
+
+      const facet1 = this.add.circle(-r * 0.18, -r * 0.16, r * 0.66, 0x64748b, 0.9);
+      const facet2 = this.add.circle(-r * 0.26, -r * 0.24, r * 0.34, 0x94a3b8, 0.65);
+      const mossAccent = this.add.circle(r * 0.28, r * 0.24, r * 0.22, 0x15803d, 0.55);
+
+      container.add([rockBase, facet1, facet2, mossAccent]);
+    }
+
+    return container;
   }
 
   private createPlayerVisual(player: any, isLocal: boolean): PlayerVisual {
