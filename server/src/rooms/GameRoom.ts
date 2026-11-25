@@ -1,5 +1,5 @@
 import { Room, Client } from "@colyseus/core";
-import { GameState, Coin, Enemy, Bullet } from "./schema/GameState";
+import { GameState, Coin, Enemy, Bullet, Obstacle } from "./schema/GameState";
 import { Player } from "./schema/Player";
 import { verifyAuthToken, AuthTokenPayload } from "../auth/authService";
 
@@ -7,8 +7,6 @@ const PLAYER_COLORS = [
   "#38bdf8", "#22c55e", "#eab308", "#f97316",
   "#ec4899", "#a855f7", "#06b6d4", "#10b981"
 ];
-
-const RESERVED_NAMES = ["sistem", "system", "admin", "moderator", "sunucu", "server"];
 
 function isValidFiniteNumber(val: unknown): val is number {
   return typeof val === "number" && Number.isFinite(val);
@@ -21,19 +19,10 @@ function normalizeAngle(angle: number): number {
 function sanitizeText(raw: unknown, maxLength: number): string {
   if (typeof raw !== "string") return "";
   return raw
-    .replace(/[\x00-\x1F\x7F<>]/g, "") // Strip control characters and angle brackets
+    .replace(/[\x00-\x1F\x7F<>]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength);
-}
-
-function sanitizePlayerName(raw: unknown, sessionId: string): string {
-  const cleaned = sanitizeText(raw, 15);
-  const lower = cleaned.toLowerCase();
-  if (!cleaned || RESERVED_NAMES.some((r) => lower === r || lower.startsWith(r))) {
-    return `Avcı_${sessionId.slice(0, 4)}`;
-  }
-  return cleaned;
 }
 
 export class GameRoom extends Room<GameState> {
@@ -63,6 +52,14 @@ export class GameRoom extends Room<GameState> {
     return player.packetCount <= 140;
   }
 
+  onAuth(_client: Client, options: any): AuthTokenPayload {
+    const payload = verifyAuthToken(options?.token);
+    if (!payload) {
+      throw new Error("Oyuna katılmak için geçerli bir hesapla giriş yapmalısınız.");
+    }
+    return payload;
+  }
+
   onCreate(options: any) {
     this.setState(new GameState());
     this.state.roomCode = this.roomId;
@@ -72,6 +69,9 @@ export class GameRoom extends Room<GameState> {
         this.state.gameMode = options.gameMode;
       }
     }
+
+    // Generate tactical arena obstacles
+    this.generateObstacles();
 
     for (let i = 0; i < 25; i++) {
       this.spawnCoin();
@@ -133,7 +133,6 @@ export class GameRoom extends Room<GameState> {
       const player = this.state.players.get(client.sessionId);
       if (!player || !this.isPacketAllowed(client, player)) return;
 
-      // Authorization check: Only room host can toggle game mode
       if (client.sessionId !== this.state.hostId) {
         client.send("system_notice", {
           text: "⚠️ Sadece Oda Sahibi (👑) oyun modunu değiştirebilir.",
@@ -143,7 +142,7 @@ export class GameRoom extends Room<GameState> {
 
       const now = Date.now();
       if (now - player.lastModeToggleTime < 2000) {
-        return; // 2-second anti-spam cooldown
+        return;
       }
       player.lastModeToggleTime = now;
 
@@ -174,7 +173,7 @@ export class GameRoom extends Room<GameState> {
 
       const now = Date.now();
       if (now - player.lastChatTime < 750) {
-        return; // 750ms chat rate limit per player
+        return;
       }
 
       const cleanText = sanitizeText(message, 80);
@@ -195,19 +194,19 @@ export class GameRoom extends Room<GameState> {
     this.setSimulationInterval((deltaTime) => this.update(deltaTime), 1000 / 50);
   }
 
-  onJoin(client: Client, options: any) {
-    console.log(`Player joined room ${this.roomId}: ${client.sessionId}`);
+  onJoin(client: Client, _options: any, auth: AuthTokenPayload) {
+    console.log(`Authenticated player joined room ${this.roomId}: ${auth.username}`);
     const player = new Player();
     player.id = client.sessionId;
-    player.name = sanitizePlayerName(options?.name, client.sessionId);
-    player.x = this.state.mapWidth / 2 + (Math.random() * 300 - 150);
-    player.y = this.state.mapHeight / 2 + (Math.random() * 300 - 150);
+    player.name = auth.username; // Verified from HMAC token
+    const spawnPos = this.findSafePosition(26, true);
+    player.x = spawnPos.x;
+    player.y = spawnPos.y;
     player.color = PLAYER_COLORS[this.state.players.size % PLAYER_COLORS.length];
     player.hp = 100;
     player.maxHp = 100;
     player.speed = 240;
 
-    // First player becomes the room host
     if (!this.state.hostId || this.state.players.size === 0) {
       this.state.hostId = client.sessionId;
     }
@@ -228,7 +227,6 @@ export class GameRoom extends Room<GameState> {
     }
     this.state.players.delete(client.sessionId);
 
-    // Reassign room host if the current host left
     if (this.state.hostId === client.sessionId) {
       const remainingIds = Array.from(this.state.players.keys());
       this.state.hostId = remainingIds.length > 0 ? remainingIds[0] : "";
@@ -241,6 +239,102 @@ export class GameRoom extends Room<GameState> {
         }
       }
     }
+  }
+
+  private generateObstacles() {
+    const types = ["rock", "wall", "pillar"];
+    const centerX = this.state.mapWidth / 2;
+    const centerY = this.state.mapHeight / 2;
+    const placed: Array<{ x: number; y: number; radius: number }> = [];
+
+    // 4 symmetrical tactical energy pillars around the center arena ring
+    const ringDist = 340;
+    for (let i = 0; i < 4; i++) {
+      const angle = (Math.PI / 2) * i + Math.PI / 4;
+      const obs = new Obstacle();
+      obs.id = `obs_center_${i}`;
+      obs.type = "pillar";
+      obs.radius = 40;
+      obs.x = Math.round(centerX + Math.cos(angle) * ringDist);
+      obs.y = Math.round(centerY + Math.sin(angle) * ringDist);
+      this.state.obstacles.set(obs.id, obs);
+      placed.push({ x: obs.x, y: obs.y, radius: obs.radius });
+    }
+
+    // 22 additional cover obstacles (rocks, walls, pillars) scattered across the map
+    let attempts = 0;
+    let count = 0;
+    while (count < 22 && attempts < 200) {
+      attempts++;
+      const radius = 36 + Math.floor(Math.random() * 26); // 36 - 62px
+      const x = Math.floor(Math.random() * (this.state.mapWidth - 260) + 130);
+      const y = Math.floor(Math.random() * (this.state.mapHeight - 260) + 130);
+
+      // Keep center spawn area clear
+      const distCenter = Math.hypot(x - centerX, y - centerY);
+      if (distCenter < 260) continue;
+
+      // Keep enough spacing between obstacles so players can maneuver
+      let overlaps = false;
+      for (const p of placed) {
+        if (Math.hypot(x - p.x, y - p.y) < radius + p.radius + 95) {
+          overlaps = true;
+          break;
+        }
+      }
+      if (overlaps) continue;
+
+      const obs = new Obstacle();
+      obs.id = `obs_${count}`;
+      obs.type = types[count % types.length];
+      obs.x = x;
+      obs.y = y;
+      obs.radius = radius;
+
+      this.state.obstacles.set(obs.id, obs);
+      placed.push({ x, y, radius });
+      count++;
+    }
+  }
+
+  private findSafePosition(entityRadius: number, nearCenter = false): { x: number; y: number } {
+    const centerX = this.state.mapWidth / 2;
+    const centerY = this.state.mapHeight / 2;
+
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const x = nearCenter
+        ? centerX + (Math.random() * 240 - 120)
+        : Math.random() * (this.state.mapWidth - 200) + 100;
+      const y = nearCenter
+        ? centerY + (Math.random() * 240 - 120)
+        : Math.random() * (this.state.mapHeight - 200) + 100;
+
+      let blocked = false;
+      this.state.obstacles.forEach((obs) => {
+        const minDist = obs.radius + entityRadius + 12;
+        if (Math.hypot(x - obs.x, y - obs.y) < minDist) {
+          blocked = true;
+        }
+      });
+
+      if (!blocked) return { x, y };
+    }
+    return { x: centerX, y: centerY };
+  }
+
+  private resolveObstacleCollision(entity: { x: number; y: number }, entityRadius: number) {
+    this.state.obstacles.forEach((obs) => {
+      const dx = entity.x - obs.x;
+      const dy = entity.y - obs.y;
+      const distSq = dx * dx + dy * dy;
+      const minDist = obs.radius + entityRadius;
+      if (distSq < minDist * minDist) {
+        const dist = Math.sqrt(distSq) || 0.001;
+        const push = minDist - dist;
+        entity.x += (dx / dist) * push;
+        entity.y += (dy / dist) * push;
+      }
+    });
   }
 
   private tryShoot(player: Player) {
@@ -273,8 +367,14 @@ export class GameRoom extends Room<GameState> {
     if (this.state.coins.size > 60) return;
     const coin = new Coin();
     coin.id = `c_${Math.random().toString(36).substring(2, 9)}`;
-    coin.x = x ?? Math.floor(Math.random() * (this.state.mapWidth - 120) + 60);
-    coin.y = y ?? Math.floor(Math.random() * (this.state.mapHeight - 120) + 60);
+    if (typeof x === "number" && typeof y === "number") {
+      coin.x = x;
+      coin.y = y;
+    } else {
+      const pos = this.findSafePosition(14, false);
+      coin.x = Math.floor(pos.x);
+      coin.y = Math.floor(pos.y);
+    }
     coin.value = value;
     this.state.coins.set(coin.id, coin);
   }
@@ -322,10 +422,12 @@ export class GameRoom extends Room<GameState> {
       enemy.x = Math.max(40, Math.min(this.state.mapWidth - 40, target.x + Math.cos(angle) * dist));
       enemy.y = Math.max(40, Math.min(this.state.mapHeight - 40, target.y + Math.sin(angle) * dist));
     } else {
-      enemy.x = Math.random() * (this.state.mapWidth - 100) + 50;
-      enemy.y = Math.random() * (this.state.mapHeight - 100) + 50;
+      const pos = this.findSafePosition(enemy.radius, false);
+      enemy.x = pos.x;
+      enemy.y = pos.y;
     }
 
+    this.resolveObstacleCollision(enemy, enemy.radius);
     this.state.enemies.set(enemy.id, enemy);
   }
 
@@ -381,8 +483,9 @@ export class GameRoom extends Room<GameState> {
           player.isDead = false;
           player.hp = player.maxHp;
           player.respawnTimer = 0;
-          player.x = Math.random() * (this.state.mapWidth - 400) + 200;
-          player.y = Math.random() * (this.state.mapHeight - 400) + 200;
+          const pos = this.findSafePosition(24, false);
+          player.x = pos.x;
+          player.y = pos.y;
         }
         return;
       }
@@ -391,6 +494,9 @@ export class GameRoom extends Room<GameState> {
 
       player.x += player.vx * dt;
       player.y += player.vy * dt;
+
+      // Resolve collisions with arena obstacles
+      this.resolveObstacleCollision(player, 20);
 
       player.x = Math.max(25, Math.min(this.state.mapWidth - 25, player.x));
       player.y = Math.max(25, Math.min(this.state.mapHeight - 25, player.y));
@@ -431,27 +537,40 @@ export class GameRoom extends Room<GameState> {
 
       let hit = false;
 
-      this.state.enemies.forEach((enemy, enemyId) => {
+      // Check bullet vs obstacles (cover blocks shots!)
+      this.state.obstacles.forEach((obs) => {
         if (hit) return;
-        const dx = bullet.x - enemy.x;
-        const dy = bullet.y - enemy.y;
-        const hitRadius = enemy.radius + 6;
-        if (dx * dx + dy * dy < hitRadius * hitRadius) {
+        const dx = bullet.x - obs.x;
+        const dy = bullet.y - obs.y;
+        const hitR = obs.radius + 4;
+        if (dx * dx + dy * dy < hitR * hitR) {
           hit = true;
-          enemy.hp -= bullet.damage;
-
-          if (enemy.hp <= 0) {
-            const reward = enemy.type === "tank" ? 50 : enemy.type === "fast" ? 25 : 15;
-            const shooter = this.state.players.get(bullet.ownerId);
-            if (shooter) {
-              shooter.score += reward;
-              shooter.kills += 1;
-            }
-            this.spawnCoin(enemy.x, enemy.y, reward);
-            this.state.enemies.delete(enemyId);
-          }
         }
       });
+
+      if (!hit) {
+        this.state.enemies.forEach((enemy, enemyId) => {
+          if (hit) return;
+          const dx = bullet.x - enemy.x;
+          const dy = bullet.y - enemy.y;
+          const hitRadius = enemy.radius + 6;
+          if (dx * dx + dy * dy < hitRadius * hitRadius) {
+            hit = true;
+            enemy.hp -= bullet.damage;
+
+            if (enemy.hp <= 0) {
+              const reward = enemy.type === "tank" ? 50 : enemy.type === "fast" ? 25 : 15;
+              const shooter = this.state.players.get(bullet.ownerId);
+              if (shooter) {
+                shooter.score += reward;
+                shooter.kills += 1;
+              }
+              this.spawnCoin(enemy.x, enemy.y, reward);
+              this.state.enemies.delete(enemyId);
+            }
+          }
+        });
+      }
 
       if (!hit && this.state.gameMode === "pvp") {
         this.state.players.forEach((targetPlayer, targetId) => {
@@ -506,6 +625,9 @@ export class GameRoom extends Room<GameState> {
         enemy.rotation = angle;
         enemy.x += Math.cos(angle) * enemy.speed * dt;
         enemy.y += Math.sin(angle) * enemy.speed * dt;
+
+        // Obstacles push enemies around them
+        this.resolveObstacleCollision(enemy, enemy.radius);
 
         const contactDist = enemy.radius + 22;
         if (minDistSq < contactDist * contactDist) {
