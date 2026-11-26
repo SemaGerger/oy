@@ -189,6 +189,14 @@ export class GameScene extends Phaser.Scene {
     this.drawBackground(this.mapW, this.mapH);
     this.cameras.main.centerOn(this.mapW / 2, this.mapH / 2);
 
+    const applyResponsiveZoom = () => {
+      const w = this.scale.width;
+      const zoom = w < 640 ? 0.68 : w < 1024 ? 0.82 : 1.0;
+      this.cameras.main.setZoom(zoom);
+    };
+    applyResponsiveZoom();
+    this.scale.on("resize", applyResponsiveZoom);
+
     EventBus.on("theme-changed", this.handleThemeChanged);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       EventBus.off("theme-changed", this.handleThemeChanged);
@@ -571,6 +579,12 @@ export class GameScene extends Phaser.Scene {
     const container = this.add.container(player.x, player.y);
     container.setDepth(20);
 
+    if (isLocal) {
+      const rangeRing = this.add.circle(0, 0, 270, 0xffffff, 0.02);
+      rangeRing.setStrokeStyle(1.5, 0xfbbf24, 0.22);
+      container.add(rangeRing);
+    }
+
     const colorHex = Phaser.Display.Color.HexStringToColor(player.color || "#38bdf8").color;
 
     // Turret / Gun barrel container (rotates toward mouse)
@@ -631,45 +645,86 @@ export class GameScene extends Phaser.Scene {
 
   private createEnemyVisual(enemy: any): EnemyVisual {
     const container = this.add.container(enemy.x, enemy.y);
-    container.setDepth(15);
+    const isBoss = enemy.type === "boss";
+    container.setDepth(isBoss ? 17 : 15);
 
     const radius = enemy.radius || 20;
     let color = 0xef4444; // normal red
     let strokeColor = 0x7f1d1d;
 
-    if (enemy.type === "fast") {
+    if (isBoss) {
+      color = 0x991b1b; // deep crimson mega boss
+      strokeColor = 0xfbbf24; // gold armored rim
+    } else if (enemy.type === "fast") {
       color = 0xf97316; // fast orange
       strokeColor = 0x7c2d12;
     } else if (enemy.type === "tank") {
-      color = 0xa855f7; // tank purple boss
+      color = 0xa855f7; // tank purple
       strokeColor = 0x581c87;
     }
 
     const bodyContainer = this.add.container(0, 0);
 
+    if (isBoss) {
+      const aura = this.add.circle(0, 0, radius + 12, 0xdc2626, 0.22);
+      bodyContainer.add(aura);
+      this.tweens.add({
+        targets: aura,
+        scale: 1.16,
+        alpha: 0.08,
+        yoyo: true,
+        repeat: -1,
+        duration: 850,
+      });
+    }
+
     // Claws / Spikes pointing forward
-    const leftClaw = this.add.triangle(radius - 2, -radius * 0.55, 0, -5, 14, 0, 0, 5, color);
-    const rightClaw = this.add.triangle(radius - 2, radius * 0.55, 0, -5, 14, 0, 0, 5, color);
+    const clawLen = isBoss ? 24 : 14;
+    const clawHalf = isBoss ? 9 : 5;
+    const leftClaw = this.add.triangle(radius - 2, -radius * 0.55, 0, -clawHalf, clawLen, 0, 0, clawHalf, isBoss ? 0xfbbf24 : color);
+    const rightClaw = this.add.triangle(radius - 2, radius * 0.55, 0, -clawHalf, clawLen, 0, 0, clawHalf, isBoss ? 0xfbbf24 : color);
     leftClaw.setStrokeStyle(1.5, 0x000000);
     rightClaw.setStrokeStyle(1.5, 0x000000);
 
     const body = this.add.circle(0, 0, radius, color);
-    body.setStrokeStyle(2.5, strokeColor);
+    body.setStrokeStyle(isBoss ? 4.5 : 2.5, strokeColor);
+
+    if (isBoss) {
+      const innerArmor = this.add.circle(0, 0, radius * 0.58, 0x7f1d1d, 1);
+      innerArmor.setStrokeStyle(2, 0xf59e0b, 0.8);
+      bodyContainer.add(innerArmor);
+    }
 
     // Angry eyes
-    const eyeLeft = this.add.circle(radius * 0.35, -radius * 0.3, 3.5, 0xfef08a);
-    const eyeRight = this.add.circle(radius * 0.35, radius * 0.3, 3.5, 0xfef08a);
+    const eyeSize = isBoss ? 6 : 3.5;
+    const eyeLeft = this.add.circle(radius * 0.35, -radius * 0.3, eyeSize, 0xfef08a);
+    const eyeRight = this.add.circle(radius * 0.35, radius * 0.3, eyeSize, 0xfef08a);
 
     bodyContainer.add([leftClaw, rightClaw, body, eyeLeft, eyeRight]);
 
     // Enemy HP Bar
     const barW = radius * 2;
-    const hpBarBg = this.add.rectangle(0, -radius - 10, barW + 2, 6, 0x0f172a, 0.8);
+    const barH = isBoss ? 9 : 6;
+    const hpBarBg = this.add.rectangle(0, -radius - 12, barW + 4, barH, 0x0f172a, 0.88);
     const hpBarFill = this.add
-      .rectangle(-barW / 2, -radius - 10, barW, 4, 0xef4444)
+      .rectangle(-barW / 2, -radius - 12, barW, barH - 2, isBoss ? 0xf59e0b : 0xef4444)
       .setOrigin(0, 0.5);
 
     container.add([bodyContainer, hpBarBg, hpBarFill]);
+
+    if (isBoss) {
+      const bossLabel = this.add
+        .text(0, -radius - 26, "DEV BOSS", {
+          fontFamily: "sans-serif",
+          fontSize: "12px",
+          fontStyle: "bold",
+          color: "#fbbf24",
+          stroke: "#000000",
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5);
+      container.add(bossLabel);
+    }
 
     return {
       container,
@@ -799,6 +854,8 @@ export class GameScene extends Phaser.Scene {
     EventBus.emit("game-info-updated", {
       wave: this.room.state.wave || 1,
       gameMode: this.room.state.gameMode || "coop",
+      difficulty: this.room.state.difficulty || "medium",
+      bossActive: Boolean(this.room.state.bossActive),
       roomCode: this.room.roomId,
       hostId: this.room.state.hostId || "",
       enemyCount: this.room.state.enemies ? this.room.state.enemies.size : 0,

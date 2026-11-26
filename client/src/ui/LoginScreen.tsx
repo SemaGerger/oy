@@ -30,6 +30,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   onBackToPortal,
 }) => {
   const [gameMode, setGameMode] = useState<"coop" | "pvp">("coop");
+  const [difficulty, setDifficulty] = useState<"medium" | "hard">("medium");
   const [roomCode, setRoomCode] = useState("");
   const [joinTab, setJoinTab] = useState<"public" | "friend">("public");
 
@@ -47,6 +48,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     onJoin({
       token,
       gameMode,
+      difficulty,
       roomCode: joinTab === "friend" ? roomCode.trim() : undefined,
       createNew,
     });
@@ -120,6 +122,50 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 </div>
                 <p style={styles.modeDesc}>
                   Hem düşmanlarla hem arkadaşlarınla savaş. Dost ateşi açık.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Difficulty Selection */}
+          <div>
+            <label style={styles.label}>Zorluk Seviyesi (Dalgalar gittikçe zorlaşır)</label>
+            <div style={styles.modeGrid}>
+              <div
+                onClick={() => setDifficulty("medium")}
+                style={{
+                  ...styles.modeCard,
+                  borderColor: difficulty === "medium" ? "#d97706" : "#e4e4e7",
+                  backgroundColor: difficulty === "medium" ? "#fffbeb" : "#fafafa",
+                }}
+              >
+                <div style={styles.modeHeader}>
+                  <span style={{ fontSize: "15px" }}>🔥</span>
+                  <span style={{ fontWeight: 800, color: "#18181b", fontSize: "13px" }}>
+                    Orta
+                  </span>
+                </div>
+                <p style={styles.modeDesc}>
+                  Dengeli artış. Her 3. dalgada Dev Boss gelir.
+                </p>
+              </div>
+
+              <div
+                onClick={() => setDifficulty("hard")}
+                style={{
+                  ...styles.modeCard,
+                  borderColor: difficulty === "hard" ? "#be123c" : "#e4e4e7",
+                  backgroundColor: difficulty === "hard" ? "#fff1f2" : "#fafafa",
+                }}
+              >
+                <div style={styles.modeHeader}>
+                  <span style={{ fontSize: "15px" }}>👑</span>
+                  <span style={{ fontWeight: 800, color: "#18181b", fontSize: "13px" }}>
+                    Zor (1.5x Skor)
+                  </span>
+                </div>
+                <p style={styles.modeDesc}>
+                  Hızlı ve sert dalgalar. Her 2. dalgada Dev Boss + minyonlar!
                 </p>
               </div>
             </div>

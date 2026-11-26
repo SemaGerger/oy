@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Gamepad2,
   Play,
@@ -20,7 +20,11 @@ import { useTheme } from "../theme/ThemeContext";
 
 interface PortalHomeProps {
   user: AuthUser | null;
-  onSelectGame: (gameId: string, playMode: "solo" | "multiplayer") => void;
+  onSelectGame: (
+    gameId: string,
+    playMode: "solo" | "multiplayer",
+    difficulty?: "medium" | "hard"
+  ) => void;
   onOpenAuth: () => void;
   onLogout: () => void;
 }
@@ -32,6 +36,7 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
   onLogout,
 }) => {
   const { isOffice, setTheme } = useTheme();
+  const [soloDifficulty, setSoloDifficulty] = useState<"medium" | "hard">("medium");
   const firstGame = GAMES_REGISTRY[0];
 
   return (
@@ -256,9 +261,95 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                 <Link2 size={14} color={isOffice ? "#64748b" : "#f59e0b"} /> Oda Koduyla Davet
               </span>
             </div>
+            {/* Solo Difficulty Selector */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
+              <span
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  color: isOffice ? "#475569" : "#d6d3d1",
+                }}
+              >
+                {isOffice ? "Seviye:" : "Zorluk:"}
+              </span>
+              <div
+                style={{
+                  display: "inline-flex",
+                  padding: "3px",
+                  borderRadius: "10px",
+                  backgroundColor: isOffice ? "#f1f5f9" : "rgba(0,0,0,0.28)",
+                  border: isOffice ? "1px solid #cbd5e1" : "1px solid rgba(255,255,255,0.12)",
+                  gap: "3px",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setSoloDifficulty("medium")}
+                  style={{
+                    border: "none",
+                    borderRadius: "7px",
+                    padding: "5px 12px",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    backgroundColor:
+                      soloDifficulty === "medium"
+                        ? isOffice
+                          ? "#ffffff"
+                          : "#f59e0b"
+                        : "transparent",
+                    color:
+                      soloDifficulty === "medium"
+                        ? isOffice
+                          ? "#b45309"
+                          : "#18181b"
+                        : isOffice
+                          ? "#64748b"
+                          : "#d6d3d1",
+                    boxShadow:
+                      soloDifficulty === "medium" && isOffice
+                        ? "0 1px 2px rgba(0,0,0,0.08)"
+                        : "none",
+                  }}
+                >
+                  🔥 Orta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSoloDifficulty("hard")}
+                  style={{
+                    border: "none",
+                    borderRadius: "7px",
+                    padding: "5px 12px",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    backgroundColor:
+                      soloDifficulty === "hard"
+                        ? isOffice
+                          ? "#fee2e2"
+                          : "#e11d48"
+                        : "transparent",
+                    color:
+                      soloDifficulty === "hard"
+                        ? isOffice
+                          ? "#b91c1c"
+                          : "#ffffff"
+                        : isOffice
+                          ? "#64748b"
+                          : "#d6d3d1",
+                  }}
+                >
+                  👑 Zor (1.5x Skor)
+                </button>
+              </div>
+            </div>
+
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "6px" }}>
               <button
-                onClick={() => onSelectGame(firstGame.id, "solo")}
+                onClick={() => onSelectGame(firstGame.id, "solo", soloDifficulty)}
                 style={{
                   ...styles.heroPlayBtn,
                   marginTop: 0,
@@ -271,7 +362,7 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
               </button>
 
               <button
-                onClick={() => onSelectGame(firstGame.id, "multiplayer")}
+                onClick={() => onSelectGame(firstGame.id, "multiplayer", soloDifficulty)}
                 style={{
                   ...styles.heroPlayBtn,
                   marginTop: 0,
@@ -293,7 +384,7 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
               backgroundColor: isOffice ? "#f8fafc" : "#2f3d36",
               border: isOffice ? "1px solid #cbd5e1" : "3px solid #3f5047",
             }}
-            onClick={() => onSelectGame(firstGame.id, "solo")}
+            onClick={() => onSelectGame(firstGame.id, "solo", soloDifficulty)}
             title="Tek kişilik hemen başlatmak için tıkla"
           >
             <div
@@ -394,7 +485,7 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                 }}
               >
                 <div
-                  onClick={() => onSelectGame(game.id, "solo")}
+                  onClick={() => onSelectGame(game.id, "solo", soloDifficulty)}
                   style={{
                     ...styles.cardThumb,
                     cursor: "pointer",
@@ -465,7 +556,7 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                   >
                     <button
                       type="button"
-                      onClick={() => onSelectGame(game.id, "solo")}
+                      onClick={() => onSelectGame(game.id, "solo", soloDifficulty)}
                       style={{
                         ...styles.playPill,
                         border: "none",
@@ -481,7 +572,7 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => onSelectGame(game.id, "multiplayer")}
+                      onClick={() => onSelectGame(game.id, "multiplayer", soloDifficulty)}
                       style={{
                         ...styles.playPill,
                         cursor: "pointer",

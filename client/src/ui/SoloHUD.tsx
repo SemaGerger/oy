@@ -12,6 +12,8 @@ interface SoloStats {
   score: number;
   isDead: boolean;
   respawnTimer: number;
+  difficulty?: "medium" | "hard";
+  bossActive?: boolean;
 }
 
 interface SoloHUDProps {
@@ -35,6 +37,8 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
     score: 0,
     isDead: false,
     respawnTimer: 0,
+    difficulty: "medium",
+    bossActive: false,
   });
 
   const [bestScore, setBestScore] = useState<number>(() => {
@@ -70,9 +74,36 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
   const panelBg = isOffice ? "#ffffff" : "rgba(28, 25, 23, 0.92)";
   const panelBorder = isOffice ? "1px solid #cbd5e1" : "1px solid #44403c";
   const panelText = isOffice ? "#0f172a" : "#fafaf9";
+  const isHard = stats.difficulty === "hard";
 
   return (
     <div style={styles.overlay}>
+      {stats.bossActive && !stats.isDead && (
+        <div
+          style={{
+            position: "absolute",
+            top: "62px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: isOffice ? "#fef2f2" : "rgba(159, 18, 57, 0.94)",
+            border: isOffice ? "1.5px solid #dc2626" : "2px solid #fbbf24",
+            color: isOffice ? "#b91c1c" : "#fef3c7",
+            borderRadius: "999px",
+            padding: "6px 18px",
+            fontSize: "12px",
+            fontWeight: 900,
+            letterSpacing: "0.06em",
+            boxShadow: isOffice
+              ? "0 4px 12px rgba(220,38,38,0.14)"
+              : "0 6px 20px rgba(190,18,60,0.45)",
+            zIndex: 35,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {isOffice ? "⚠ YÜKSEK ÖNCELİKLİ SÜREÇ AKTİF" : "👑 DEV BOSS GELDİ! DİKKAT ET!"}
+        </div>
+      )}
+
       {stats.isDead && (
         <div
           style={{
@@ -128,6 +159,30 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
             {!isOffice && <Flame size={15} color="#f97316" />}
             <span style={{ fontWeight: 800, color: isOffice ? "#2563eb" : "#fbbf24" }}>
               {isOffice ? `Aşama ${stats.wave}` : `DALGA ${stats.wave}`}
+            </span>
+            <span
+              style={{
+                fontSize: "10px",
+                fontWeight: 800,
+                padding: "2px 6px",
+                borderRadius: "6px",
+                backgroundColor: isHard
+                  ? isOffice
+                    ? "#fee2e2"
+                    : "rgba(220,38,38,0.28)"
+                  : isOffice
+                    ? "#fef3c7"
+                    : "rgba(245,158,11,0.22)",
+                color: isHard
+                  ? isOffice
+                    ? "#b91c1c"
+                    : "#fca5a5"
+                  : isOffice
+                    ? "#b45309"
+                    : "#fcd34d",
+              }}
+            >
+              {isHard ? "ZOR" : "ORTA"}
             </span>
             <span style={{ color: "#64748b" }}>•</span>
             <span style={{ fontSize: "12px", color: isOffice ? "#475569" : "#f87171", fontWeight: 600 }}>

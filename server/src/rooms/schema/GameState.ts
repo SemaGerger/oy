@@ -95,7 +95,9 @@ export class GameState extends Schema {
   @type("number") declare mapWidth: number;
   @type("number") declare mapHeight: number;
   @type("string") declare gameMode: string;
+  @type("string") declare difficulty: string; // "medium" | "hard"
   @type("number") declare wave: number;
+  @type("boolean") declare bossActive: boolean;
   @type("string") declare roomCode: string;
   @type("string") declare hostId: string;
 
@@ -109,7 +111,9 @@ export class GameState extends Schema {
     this.mapWidth = 2200;
     this.mapHeight = 2200;
     this.gameMode = "coop";
+    this.difficulty = "medium";
     this.wave = 1;
+    this.bossActive = false;
     this.roomCode = "";
     this.hostId = "";
   }

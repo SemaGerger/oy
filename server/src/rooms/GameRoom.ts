@@ -29,6 +29,7 @@ export class GameRoom extends Room<GameState> {
   maxClients = 20;
   private enemySpawnTimer = 0;
   private waveTimer = 0;
+  private bossSummonTimer = 0;
   private nextBulletId = 1;
   private nextEnemyId = 1;
 
@@ -68,6 +69,9 @@ export class GameRoom extends Room<GameState> {
       if (options.gameMode === "pvp" || options.gameMode === "coop") {
         this.state.gameMode = options.gameMode;
       }
+      if (options.difficulty === "hard" || options.difficulty === "medium") {
+        this.state.difficulty = options.difficulty;
+      }
     }
 
     // Generate tactical arena obstacles
@@ -77,7 +81,8 @@ export class GameRoom extends Room<GameState> {
       this.spawnCoin();
     }
 
-    for (let i = 0; i < 6; i++) {
+    const initialEnemies = this.state.difficulty === "hard" ? 9 : 6;
+    for (let i = 0; i < initialEnemies; i++) {
       this.spawnEnemy();
     }
 
@@ -338,7 +343,7 @@ export class GameRoom extends Room<GameState> {
   }
 
   private autoAimAndShoot(player: Player) {
-    const maxRangeSq = 560 * 560;
+    const maxRangeSq = 270 * 270;
     let nearestX = 0;
     let nearestY = 0;
     let minDistSq = maxRangeSq;
@@ -423,52 +428,90 @@ export class GameRoom extends Room<GameState> {
     this.state.coins.set(coin.id, coin);
   }
 
-  private spawnEnemy() {
-    const maxEnemies = Math.min(45, 10 + this.state.wave * 4 + this.state.players.size * 3);
-    if (this.state.enemies.size >= maxEnemies) return;
+  private spawnEnemy(
+    forcedType?: "normal" | "fast" | "tank" | "boss",
+    nearX?: number,
+    nearY?: number
+  ) {
+    const isHard = this.state.difficulty === "hard";
+    const maxEnemies = Math.min(
+      55,
+      (isHard ? 15 : 10) + this.state.wave * (isHard ? 5 : 4) + this.state.players.size * 3
+    );
+    if (forcedType !== "boss" && this.state.enemies.size >= maxEnemies) return;
 
     const enemy = new Enemy();
     enemy.id = `e_${this.nextEnemyId++}`;
 
-    const roll = Math.random();
-    if (this.state.wave >= 2 && roll < 0.16) {
-      enemy.type = "tank";
-      enemy.hp = 130 + this.state.wave * 20;
-      enemy.maxHp = enemy.hp;
-      enemy.speed = 75 + Math.min(35, this.state.wave * 2);
-      enemy.radius = 30;
-      enemy.damage = 25;
-    } else if (roll < 0.45) {
-      enemy.type = "fast";
-      enemy.hp = 25 + this.state.wave * 5;
-      enemy.maxHp = enemy.hp;
-      enemy.speed = 175 + Math.min(50, this.state.wave * 4);
-      enemy.radius = 15;
-      enemy.damage = 10;
-    } else {
-      enemy.type = "normal";
-      enemy.hp = 45 + this.state.wave * 8;
-      enemy.maxHp = enemy.hp;
-      enemy.speed = 115 + Math.min(45, this.state.wave * 3);
-      enemy.radius = 20;
-      enemy.damage = 15;
+    // Progressive scaling per wave & difficulty
+    const w = this.state.wave;
+    const hpScale = (1 + (w - 1) * (isHard ? 0.24 : 0.17)) * (isHard ? 1.35 : 1.0);
+    const spdScale = (1 + Math.min(0.6, (w - 1) * (isHard ? 0.075 : 0.05))) * (isHard ? 1.15 : 1.0);
+    const dmgScale = (1 + (w - 1) * (isHard ? 0.14 : 0.09)) * (isHard ? 1.3 : 1.0);
+
+    let chosenType: "normal" | "fast" | "tank" | "boss" = forcedType || "normal";
+    if (!forcedType) {
+      const roll = Math.random();
+      const tankChance = w >= 2 ? Math.min(0.28, (isHard ? 0.16 : 0.1) + w * 0.025) : 0;
+      const fastChance = Math.min(0.45, (isHard ? 0.34 : 0.24) + w * 0.03);
+      if (roll < tankChance) {
+        chosenType = "tank";
+      } else if (roll < tankChance + fastChance) {
+        chosenType = "fast";
+      } else {
+        chosenType = "normal";
+      }
     }
 
-    const livingPlayers: Player[] = [];
-    this.state.players.forEach((p) => {
-      if (!p.isDead) livingPlayers.push(p);
-    });
-
-    if (livingPlayers.length > 0) {
-      const target = livingPlayers[Math.floor(Math.random() * livingPlayers.length)];
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 550 + Math.random() * 250;
-      enemy.x = Math.max(40, Math.min(this.state.mapWidth - 40, target.x + Math.cos(angle) * dist));
-      enemy.y = Math.max(40, Math.min(this.state.mapHeight - 40, target.y + Math.sin(angle) * dist));
+    enemy.type = chosenType;
+    if (chosenType === "boss") {
+      enemy.hp = Math.round((440 + w * 160) * (isHard ? 1.4 : 1.0));
+      enemy.maxHp = enemy.hp;
+      enemy.speed = Math.round((82 + Math.min(42, w * 4)) * (isHard ? 1.14 : 1.0));
+      enemy.radius = 46;
+      enemy.damage = Math.round(34 * dmgScale);
+      this.state.bossActive = true;
+    } else if (chosenType === "tank") {
+      enemy.hp = Math.round(135 * hpScale);
+      enemy.maxHp = enemy.hp;
+      enemy.speed = Math.round(78 * spdScale);
+      enemy.radius = 30;
+      enemy.damage = Math.round(24 * dmgScale);
+    } else if (chosenType === "fast") {
+      enemy.hp = Math.round(26 * hpScale);
+      enemy.maxHp = enemy.hp;
+      enemy.speed = Math.round(172 * spdScale);
+      enemy.radius = 15;
+      enemy.damage = Math.round(11 * dmgScale);
     } else {
-      const pos = this.findSafePosition(enemy.radius, false);
-      enemy.x = pos.x;
-      enemy.y = pos.y;
+      enemy.hp = Math.round(48 * hpScale);
+      enemy.maxHp = enemy.hp;
+      enemy.speed = Math.round(115 * spdScale);
+      enemy.radius = 20;
+      enemy.damage = Math.round(15 * dmgScale);
+    }
+
+    if (typeof nearX === "number" && typeof nearY === "number") {
+      const a = Math.random() * Math.PI * 2;
+      enemy.x = Math.max(40, Math.min(this.state.mapWidth - 40, nearX + Math.cos(a) * 65));
+      enemy.y = Math.max(40, Math.min(this.state.mapHeight - 40, nearY + Math.sin(a) * 65));
+    } else {
+      const livingPlayers: Player[] = [];
+      this.state.players.forEach((p) => {
+        if (!p.isDead) livingPlayers.push(p);
+      });
+
+      if (livingPlayers.length > 0) {
+        const target = livingPlayers[Math.floor(Math.random() * livingPlayers.length)];
+        const angle = Math.random() * Math.PI * 2;
+        const dist = chosenType === "boss" ? 480 : 440 + Math.random() * 220;
+        enemy.x = Math.max(50, Math.min(this.state.mapWidth - 50, target.x + Math.cos(angle) * dist));
+        enemy.y = Math.max(50, Math.min(this.state.mapHeight - 50, target.y + Math.sin(angle) * dist));
+      } else {
+        const pos = this.findSafePosition(enemy.radius, false);
+        enemy.x = pos.x;
+        enemy.y = pos.y;
+      }
     }
 
     this.resolveObstacleCollision(enemy, enemy.radius);
@@ -493,27 +536,63 @@ export class GameRoom extends Room<GameState> {
   private update(deltaTime: number) {
     const dt = deltaTime / 1000;
     const now = Date.now();
+    const isHard = this.state.difficulty === "hard";
 
     if (this.state.players.size > 0) {
       this.enemySpawnTimer += dt;
       this.waveTimer += dt;
 
+      const baseInterval = isHard ? 1.55 : 2.0;
+      const minInterval = isHard ? 0.38 : 0.52;
       const spawnInterval = Math.max(
-        0.6,
-        2.2 - this.state.wave * 0.15 - this.state.players.size * 0.2
+        minInterval,
+        baseInterval - (this.state.wave - 1) * (isHard ? 0.16 : 0.13) - this.state.players.size * 0.15
       );
       if (this.enemySpawnTimer >= spawnInterval) {
         this.enemySpawnTimer = 0;
         this.spawnEnemy();
       }
 
-      if (this.waveTimer >= 30) {
+      // Mega Boss minion summon mechanic (every 4.5s while boss is alive)
+      if (this.state.bossActive) {
+        this.bossSummonTimer += dt;
+        if (this.bossSummonTimer >= 4.5) {
+          this.bossSummonTimer = 0;
+          this.state.enemies.forEach((e) => {
+            if (e.type === "boss") {
+              this.spawnEnemy("fast", e.x, e.y);
+              if (isHard) {
+                this.spawnEnemy("fast", e.x, e.y);
+              }
+            }
+          });
+        }
+      }
+
+      // Advance wave every 25 seconds for brisk, exciting escalation
+      if (this.waveTimer >= 25) {
         this.waveTimer = 0;
         this.state.wave += 1;
-        this.broadcast("system_notice", {
-          text: `🔥 DALGA ${this.state.wave} BAŞLADI! Düşmanlar güçleniyor!`,
-        });
-        for (let i = 0; i < 3 + this.state.players.size; i++) {
+
+        const isBossWave = isHard
+          ? this.state.wave % 2 === 0
+          : this.state.wave % 3 === 0;
+
+        if (isBossWave) {
+          this.spawnEnemy("boss");
+          this.spawnEnemy("fast");
+          this.spawnEnemy("fast");
+          this.broadcast("system_notice", {
+            text: `👑 DALGA ${this.state.wave} — DEV BOSS GELDİ! Dikkatli olun!`,
+          });
+        } else {
+          this.broadcast("system_notice", {
+            text: `🔥 DALGA ${this.state.wave} BAŞLADI! Düşmanlar daha hızlı ve güçlü!`,
+          });
+        }
+
+        const burstCount = (isHard ? 4 : 3) + this.state.players.size;
+        for (let i = 0; i < burstCount; i++) {
           this.spawnEnemy();
         }
       }
@@ -568,7 +647,7 @@ export class GameRoom extends Room<GameState> {
       bullet.y += bullet.vy * dt;
 
       if (
-        now - bullet.createdAt > 1300 ||
+        now - bullet.createdAt > 480 ||
         bullet.x < 0 ||
         bullet.x > this.state.mapWidth ||
         bullet.y < 0 ||
@@ -602,14 +681,48 @@ export class GameRoom extends Room<GameState> {
             enemy.hp -= bullet.damage;
 
             if (enemy.hp <= 0) {
-              const reward = enemy.type === "tank" ? 50 : enemy.type === "fast" ? 25 : 15;
+              const scoreMult = isHard ? 1.5 : 1.0;
+              const baseReward =
+                enemy.type === "boss"
+                  ? 250
+                  : enemy.type === "tank"
+                    ? 55
+                    : enemy.type === "fast"
+                      ? 25
+                      : 15;
+              const reward = Math.round(baseReward * scoreMult);
               const shooter = this.state.players.get(bullet.ownerId);
               if (shooter) {
                 shooter.score += reward;
                 shooter.kills += 1;
               }
-              this.spawnCoin(enemy.x, enemy.y, reward);
+
+              if (enemy.type === "boss") {
+                // Jackpot drop of 5 healing/score orbs!
+                for (let k = 0; k < 5; k++) {
+                  const a = (Math.PI * 2 * k) / 5;
+                  this.spawnCoin(
+                    enemy.x + Math.cos(a) * 34,
+                    enemy.y + Math.sin(a) * 34,
+                    Math.round(35 * scoreMult)
+                  );
+                }
+                this.broadcast("system_notice", {
+                  text: `🏆 ${shooter ? shooter.name : "Takım"} DEV BOSS'U YOK ETTİ! (+${reward} puan)`,
+                });
+              } else {
+                this.spawnCoin(enemy.x, enemy.y, reward);
+              }
+
               this.state.enemies.delete(enemyId);
+
+              if (enemy.type === "boss") {
+                let stillHasBoss = false;
+                this.state.enemies.forEach((rem) => {
+                  if (rem.type === "boss") stillHasBoss = true;
+                });
+                this.state.bossActive = stillHasBoss;
+              }
             }
           }
         });
@@ -680,11 +793,13 @@ export class GameRoom extends Room<GameState> {
 
             if (nearestPlayer.hp <= 0) {
               const enemyLabel =
-                enemy.type === "tank"
-                  ? "👾 Boss Düşman"
-                  : enemy.type === "fast"
-                    ? "⚡ Hızlı Düşman"
-                    : "🧟 Zombi Düşman";
+                enemy.type === "boss"
+                  ? "👑 DEV BOSS"
+                  : enemy.type === "tank"
+                    ? "👾 Ağır Tank"
+                    : enemy.type === "fast"
+                      ? "⚡ Hızlı Düşman"
+                      : "🧟 Zombi Düşman";
               this.killPlayer(nearestPlayer, enemyLabel);
             }
           }

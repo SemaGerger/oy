@@ -11,7 +11,7 @@ interface SoloObstacle {
 }
 
 interface SoloEnemy {
-  type: "normal" | "fast" | "tank";
+  type: "normal" | "fast" | "tank" | "boss";
   x: number;
   y: number;
   hp: number;
@@ -48,6 +48,7 @@ export class SoloGameScene extends Phaser.Scene {
 
   private currentTheme: AppTheme = getSavedTheme();
   private bgGraphics: Phaser.GameObjects.Graphics | null = null;
+  private difficulty: "medium" | "hard" = "medium";
 
   // Player state
   private playerX = 1100;
@@ -63,10 +64,11 @@ export class SoloGameScene extends Phaser.Scene {
   private lastShootTime = 0;
   private lastDamageTime = 0;
 
-  // Wave state
+  // Wave & Boss state
   private wave = 1;
   private waveTimer = 0;
   private spawnTimer = 0;
+  private bossSummonTimer = 0;
 
   // Player visuals
   private playerContainer!: Phaser.GameObjects.Container;
@@ -98,8 +100,9 @@ export class SoloGameScene extends Phaser.Scene {
 
   private lastHudEmit = 0;
 
-  constructor() {
+  constructor(difficulty: "medium" | "hard" = "medium") {
     super("SoloGameScene");
+    this.difficulty = difficulty === "hard" ? "hard" : "medium";
   }
 
   private handleThemeChanged = (nextTheme: AppTheme) => {
@@ -126,7 +129,8 @@ export class SoloGameScene extends Phaser.Scene {
     for (let i = 0; i < 22; i++) {
       this.spawnCoin();
     }
-    for (let i = 0; i < 6; i++) {
+    const initialEnemies = this.difficulty === "hard" ? 9 : 6;
+    for (let i = 0; i < initialEnemies; i++) {
       this.spawnEnemy();
     }
 
@@ -410,9 +414,19 @@ export class SoloGameScene extends Phaser.Scene {
     return container;
   }
 
+  private applyResponsiveZoom() {
+    const w = this.scale.width;
+    const zoom = w < 640 ? 0.68 : w < 1024 ? 0.82 : 1.0;
+    this.cameras.main.setZoom(zoom);
+  }
+
   private createPlayerVisual() {
     this.playerContainer = this.add.container(this.playerX, this.playerY);
     this.playerContainer.setDepth(20);
+
+    // Subtle auto-shoot range ring (270px)
+    const rangeRing = this.add.circle(0, 0, 270, 0xffffff, 0.02);
+    rangeRing.setStrokeStyle(1.5, 0xfbbf24, 0.22);
 
     this.turretContainer = this.add.container(0, 0);
     const gunBarrel = this.add.rectangle(18, 0, 22, 8, 0x94a3b8);
@@ -437,6 +451,7 @@ export class SoloGameScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.playerContainer.add([
+      rangeRing,
       this.turretContainer,
       body,
       hpBg,
@@ -445,6 +460,8 @@ export class SoloGameScene extends Phaser.Scene {
     ]);
 
     this.cameras.main.startFollow(this.playerContainer, true, 0.12, 0.12);
+    this.applyResponsiveZoom();
+    this.scale.on("resize", () => this.applyResponsiveZoom());
   }
 
   private findSafePos(radius: number): { x: number; y: number } {
@@ -495,64 +512,147 @@ export class SoloGameScene extends Phaser.Scene {
     this.coins.push({ x: pos.x, y: pos.y, value, container });
   }
 
-  private spawnEnemy() {
-    const maxEnemies = Math.min(40, 10 + this.wave * 4);
-    if (this.enemies.length >= maxEnemies) return;
+  private spawnEnemy(
+    forcedType?: "normal" | "fast" | "tank" | "boss",
+    nearX?: number,
+    nearY?: number
+  ) {
+    const isHard = this.difficulty === "hard";
+    const maxEnemies = Math.min(
+      isHard ? 54 : 42,
+      (isHard ? 14 : 10) + this.wave * (isHard ? 5 : 4)
+    );
+    if (forcedType !== "boss" && this.enemies.length >= maxEnemies) return;
 
-    const roll = Math.random();
-    let type: "normal" | "fast" | "tank" = "normal";
-    let hp = 45 + this.wave * 8;
-    let speed = 115 + Math.min(45, this.wave * 3);
+    const w = Math.max(0, this.wave - 1);
+    const hpScale = (isHard ? 1.38 : 1.0) * (1 + w * (isHard ? 0.24 : 0.16));
+    const spdScale = (isHard ? 1.15 : 1.0) * (1 + Math.min(0.65, w * (isHard ? 0.065 : 0.045)));
+    const dmgScale = (isHard ? 1.35 : 1.0) * (1 + w * 0.1);
+
+    let type: "normal" | "fast" | "tank" | "boss" = forcedType ?? "normal";
+    if (!forcedType) {
+      const roll = Math.random();
+      const tankChance = Math.min(0.32, (isHard ? 0.12 : 0.08) + w * 0.03);
+      const fastChance = Math.min(0.45, (isHard ? 0.34 : 0.28) + w * 0.02);
+      if (this.wave >= 2 && roll < tankChance) {
+        type = "tank";
+      } else if (roll < tankChance + fastChance) {
+        type = "fast";
+      }
+    }
+
+    let hp = Math.round(45 * hpScale);
+    let speed = Math.min(230, Math.round(112 * spdScale));
     let radius = 20;
-    let damage = 15;
+    let damage = Math.round(14 * dmgScale);
     let color = 0xef4444;
     let stroke = 0x7f1d1d;
 
-    if (this.wave >= 2 && roll < 0.16) {
-      type = "tank";
-      hp = 130 + this.wave * 20;
-      speed = 75 + Math.min(35, this.wave * 2);
+    if (type === "boss") {
+      hp = Math.round(520 * hpScale);
+      speed = Math.min(145, Math.round(78 * spdScale));
+      radius = 46;
+      damage = Math.round(32 * dmgScale);
+      color = 0xbe123c;
+      stroke = 0xfbbf24;
+    } else if (type === "tank") {
+      hp = Math.round(135 * hpScale);
+      speed = Math.min(155, Math.round(74 * spdScale));
       radius = 30;
-      damage = 25;
+      damage = Math.round(24 * dmgScale);
       color = 0xa855f7;
       stroke = 0x581c87;
-    } else if (roll < 0.45) {
-      type = "fast";
-      hp = 25 + this.wave * 5;
-      speed = 175 + Math.min(50, this.wave * 4);
+    } else if (type === "fast") {
+      hp = Math.round(26 * hpScale);
+      speed = Math.min(275, Math.round(170 * spdScale));
       radius = 15;
-      damage = 10;
+      damage = Math.round(10 * dmgScale);
       color = 0xf97316;
       stroke = 0x7c2d12;
     }
 
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 500 + Math.random() * 240;
-    const pos = {
-      x: Math.max(40, Math.min(this.mapW - 40, this.playerX + Math.cos(angle) * dist)),
-      y: Math.max(40, Math.min(this.mapH - 40, this.playerY + Math.sin(angle) * dist)),
-    };
+    let pos: { x: number; y: number };
+    if (typeof nearX === "number" && typeof nearY === "number") {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 70 + Math.random() * 60;
+      pos = {
+        x: Math.max(45, Math.min(this.mapW - 45, nearX + Math.cos(angle) * dist)),
+        y: Math.max(45, Math.min(this.mapH - 45, nearY + Math.sin(angle) * dist)),
+      };
+    } else {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = type === "boss" ? 560 : 500 + Math.random() * 240;
+      pos = {
+        x: Math.max(55, Math.min(this.mapW - 55, this.playerX + Math.cos(angle) * dist)),
+        y: Math.max(55, Math.min(this.mapH - 55, this.playerY + Math.sin(angle) * dist)),
+      };
+    }
     this.resolveObstacleCollision(pos, radius);
 
     const container = this.add.container(pos.x, pos.y);
-    container.setDepth(15);
+    container.setDepth(type === "boss" ? 17 : 15);
 
     const bodyContainer = this.add.container(0, 0);
-    const leftClaw = this.add.triangle(radius - 2, -radius * 0.55, 0, -5, 14, 0, 0, 5, color);
-    const rightClaw = this.add.triangle(radius - 2, radius * 0.55, 0, -5, 14, 0, 0, 5, color);
+    const isBoss = type === "boss";
+
+    if (isBoss) {
+      const aura = this.add.circle(0, 0, radius + 12, 0xf43f5e, 0.22);
+      aura.setStrokeStyle(2, 0xfbbf24, 0.65);
+      bodyContainer.add(aura);
+    }
+
+    const clawScale = isBoss ? 1.9 : 1;
+    const leftClaw = this.add.triangle(
+      radius - 2,
+      -radius * 0.55,
+      0,
+      -5 * clawScale,
+      14 * clawScale,
+      0,
+      0,
+      5 * clawScale,
+      isBoss ? 0xfbbf24 : color
+    );
+    const rightClaw = this.add.triangle(
+      radius - 2,
+      radius * 0.55,
+      0,
+      -5 * clawScale,
+      14 * clawScale,
+      0,
+      0,
+      5 * clawScale,
+      isBoss ? 0xfbbf24 : color
+    );
     const body = this.add.circle(0, 0, radius, color);
-    body.setStrokeStyle(2.5, stroke);
-    const eyeL = this.add.circle(radius * 0.35, -radius * 0.3, 3.5, 0xfef08a);
-    const eyeR = this.add.circle(radius * 0.35, radius * 0.3, 3.5, 0xfef08a);
+    body.setStrokeStyle(isBoss ? 4.5 : 2.5, stroke);
+    const eyeSize = isBoss ? 6.5 : 3.5;
+    const eyeL = this.add.circle(radius * 0.35, -radius * 0.3, eyeSize, 0xfef08a);
+    const eyeR = this.add.circle(radius * 0.35, radius * 0.3, eyeSize, 0xfef08a);
     bodyContainer.add([leftClaw, rightClaw, body, eyeL, eyeR]);
 
     const barW = radius * 2;
-    const hpBg = this.add.rectangle(0, -radius - 10, barW + 2, 6, 0x0f172a, 0.8);
+    const barH = isBoss ? 8 : 4;
+    const hpBg = this.add.rectangle(0, -radius - 12, barW + 4, barH + 3, 0x0f172a, 0.9);
     const hpBarFill = this.add
-      .rectangle(-barW / 2, -radius - 10, barW, 4, 0xef4444)
+      .rectangle(-barW / 2, -radius - 12, barW, barH, isBoss ? 0xfbbf24 : 0xef4444)
       .setOrigin(0, 0.5);
 
     container.add([bodyContainer, hpBg, hpBarFill]);
+
+    if (isBoss) {
+      const bossLabel = this.add
+        .text(0, -radius - 28, "DEV BOSS", {
+          fontFamily: "sans-serif",
+          fontSize: "12px",
+          fontStyle: "bold",
+          color: "#fef08a",
+          stroke: "#7f1d1d",
+          strokeThickness: 4,
+        })
+        .setOrigin(0.5);
+      container.add(bossLabel);
+    }
 
     this.enemies.push({
       type,
@@ -619,25 +719,57 @@ export class SoloGameScene extends Phaser.Scene {
       score: this.score,
       isDead: this.isDead,
       respawnTimer: this.respawnTimer,
+      difficulty: this.difficulty,
+      bossActive: this.enemies.some((e) => e.type === "boss"),
     });
   }
 
   update(time: number, delta: number) {
     const dt = Math.min(0.05, delta / 1000);
     const now = Date.now();
+    const isHard = this.difficulty === "hard";
 
-    // 1. Wave & Enemy Spawner
+    // 1. Progressive Wave, Boss & Enemy Spawner
     this.spawnTimer += dt;
     this.waveTimer += dt;
-    const spawnInterval = Math.max(0.65, 2.0 - this.wave * 0.14);
+    const spawnInterval = Math.max(
+      isHard ? 0.42 : 0.65,
+      (isHard ? 1.55 : 1.95) - this.wave * (isHard ? 0.14 : 0.12)
+    );
     if (this.spawnTimer >= spawnInterval) {
       this.spawnTimer = 0;
       this.spawnEnemy();
     }
-    if (this.waveTimer >= 30) {
+
+    if (this.waveTimer >= 25) {
       this.waveTimer = 0;
       this.wave += 1;
-      for (let i = 0; i < 4; i++) this.spawnEnemy();
+      const waveBurst = 4 + Math.min(4, Math.floor(this.wave / 2));
+      for (let i = 0; i < waveBurst; i++) {
+        this.spawnEnemy();
+      }
+
+      const isBossWave = isHard ? this.wave % 2 === 0 : this.wave % 3 === 0;
+      const hasBoss = this.enemies.some((e) => e.type === "boss");
+      if (isBossWave && !hasBoss) {
+        this.spawnEnemy("boss");
+        this.cameras.main.shake(220, 0.006);
+      }
+    }
+
+    // Active Mega Boss summons minions every 4.5s
+    const activeBoss = this.enemies.find((e) => e.type === "boss");
+    if (activeBoss) {
+      this.bossSummonTimer += dt;
+      if (this.bossSummonTimer >= 4.5) {
+        this.bossSummonTimer = 0;
+        const summonCount = isHard ? 2 : 1;
+        for (let s = 0; s < summonCount; s++) {
+          this.spawnEnemy(Math.random() < 0.55 ? "fast" : "normal", activeBoss.x, activeBoss.y);
+        }
+      }
+    } else {
+      this.bossSummonTimer = 0;
     }
 
     // 2. Player Movement or Respawn
@@ -677,9 +809,9 @@ export class SoloGameScene extends Phaser.Scene {
       this.playerX = Math.max(25, Math.min(this.mapW - 25, pos.x));
       this.playerY = Math.max(25, Math.min(this.mapH - 25, pos.y));
 
-      // Auto-aim & Auto-shoot nearest enemy within 560px
+      // Auto-aim & Auto-shoot nearest enemy within 270px (visible on screen)
       let nearest: SoloEnemy | null = null;
-      let minDistSq = 560 * 560;
+      let minDistSq = 270 * 270;
       for (const e of this.enemies) {
         const dSq = (e.x - this.playerX) ** 2 + (e.y - this.playerY) ** 2;
         if (dSq < minDistSq) {
@@ -725,7 +857,7 @@ export class SoloGameScene extends Phaser.Scene {
       b.container.setPosition(b.x, b.y);
 
       let remove =
-        now - b.createdAt > 1300 || b.x < 0 || b.x > this.mapW || b.y < 0 || b.y > this.mapH;
+        now - b.createdAt > 480 || b.x < 0 || b.x > this.mapW || b.y < 0 || b.y > this.mapH;
 
       if (!remove) {
         for (const obs of this.obstacles) {
@@ -747,10 +879,23 @@ export class SoloGameScene extends Phaser.Scene {
             e.hpBarFill.width = e.radius * 2 * Math.max(0, e.hp / e.maxHp);
 
             if (e.hp <= 0) {
-              const reward = e.type === "tank" ? 50 : e.type === "fast" ? 25 : 15;
+              const baseReward =
+                e.type === "boss" ? 250 : e.type === "tank" ? 50 : e.type === "fast" ? 25 : 15;
+              const reward = isHard ? Math.round(baseReward * 1.5) : baseReward;
               this.score += reward;
               this.kills += 1;
-              this.spawnCoin(e.x, e.y, reward);
+
+              if (e.type === "boss") {
+                this.cameras.main.shake(180, 0.005);
+                for (let k = 0; k < 5; k++) {
+                  const ox = e.x + (Math.random() - 0.5) * 90;
+                  const oy = e.y + (Math.random() - 0.5) * 90;
+                  this.spawnCoin(ox, oy, 30);
+                }
+              } else {
+                this.spawnCoin(e.x, e.y, reward);
+              }
+
               e.container.destroy();
               this.enemies.splice(j, 1);
             }

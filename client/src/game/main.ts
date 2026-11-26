@@ -29,8 +29,11 @@ export const createPhaserGame = (parent: HTMLElement, room: Room): Phaser.Game =
   return new Phaser.Game(config);
 };
 
-export const createSoloPhaserGame = (parent: HTMLElement): Phaser.Game => {
-  const soloScene = new SoloGameScene();
+export const createSoloPhaserGame = (
+  parent: HTMLElement,
+  difficulty: "medium" | "hard" = "medium"
+): Phaser.Game => {
+  const soloScene = new SoloGameScene(difficulty);
 
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,

@@ -26,6 +26,7 @@ export const App: React.FC = () => {
   const [playMode, setPlayMode] = useState<"solo" | "multiplayer">(
     hasInviteRoom ? "multiplayer" : "solo"
   );
+  const [soloDifficulty, setSoloDifficulty] = useState<"medium" | "hard">("medium");
 
   const [room, setRoom] = useState<Room | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -75,13 +76,18 @@ export const App: React.FC = () => {
     setShowAuthScreen(false);
   };
 
-  const handleSelectGame = (gameId: string, mode: "solo" | "multiplayer") => {
+  const handleSelectGame = (
+    gameId: string,
+    mode: "solo" | "multiplayer",
+    difficulty: "medium" | "hard" = "medium"
+  ) => {
     if (room) {
       room.leave();
       setRoom(null);
     }
     destroyPhaser();
     setError(null);
+    setSoloDifficulty(difficulty);
     setPlayMode(mode);
     setSelectedGameId(gameId);
   };
@@ -123,14 +129,14 @@ export const App: React.FC = () => {
   // Mount Solo Phaser Scene
   useEffect(() => {
     if (selectedGameId && playMode === "solo" && phaserContainerRef.current && !gameInstanceRef.current) {
-      gameInstanceRef.current = createSoloPhaserGame(phaserContainerRef.current);
+      gameInstanceRef.current = createSoloPhaserGame(phaserContainerRef.current, soloDifficulty);
     }
     return () => {
       if (playMode === "solo") {
         destroyPhaser();
       }
     };
-  }, [selectedGameId, playMode]);
+  }, [selectedGameId, playMode, soloDifficulty]);
 
   // Mount Multiplayer Phaser Scene
   useEffect(() => {

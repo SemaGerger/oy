@@ -35,6 +35,8 @@ interface PlayerInfo {
 interface GameInfo {
   wave: number;
   gameMode: "coop" | "pvp";
+  difficulty?: "medium" | "hard";
+  bossActive?: boolean;
   roomCode: string;
   hostId?: string;
   enemyCount: number;
@@ -66,6 +68,8 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
   const [gameInfo, setGameInfo] = useState<GameInfo>({
     wave: 1,
     gameMode: "coop",
+    difficulty: "medium",
+    bossActive: false,
     roomCode: room.roomId,
     hostId: "",
     enemyCount: 0,
@@ -147,6 +151,7 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
 
   const localPlayer = players.find((p) => p.isLocal);
   const isPvp = gameInfo.gameMode === "pvp";
+  const isHard = gameInfo.difficulty === "hard";
   const isHost = !gameInfo.hostId || gameInfo.hostId === room.sessionId;
 
   const panelBg = isOffice ? "#ffffff" : "rgba(28, 25, 23, 0.92)";
@@ -155,6 +160,33 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
 
   return (
     <div style={styles.overlay}>
+      {/* Mega Boss Active Alert Banner */}
+      {gameInfo.bossActive && !localPlayer?.isDead && (
+        <div
+          style={{
+            position: "absolute",
+            top: "62px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: isOffice ? "#fef2f2" : "rgba(159, 18, 57, 0.94)",
+            border: isOffice ? "1.5px solid #dc2626" : "2px solid #fbbf24",
+            color: isOffice ? "#b91c1c" : "#fef3c7",
+            borderRadius: "999px",
+            padding: "6px 18px",
+            fontSize: "12px",
+            fontWeight: 900,
+            letterSpacing: "0.06em",
+            boxShadow: isOffice
+              ? "0 4px 12px rgba(220,38,38,0.14)"
+              : "0 6px 20px rgba(190,18,60,0.45)",
+            zIndex: 35,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {isOffice ? "⚠ YÜKSEK ÖNCELİKLİ SÜREÇ AKTİF" : "👑 DEV BOSS GELDİ! TAKIMCA VURUN!"}
+        </div>
+      )}
+
       {/* Respawn Banner when Local Player is Dead */}
       {localPlayer?.isDead && (
         <div
@@ -221,6 +253,30 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
             {!isOffice && <Flame size={15} color="#f97316" />}
             <span style={{ fontWeight: 800, color: isOffice ? "#2563eb" : "#fbbf24" }}>
               {isOffice ? `Aşama ${gameInfo.wave}` : `DALGA ${gameInfo.wave}`}
+            </span>
+            <span
+              style={{
+                fontSize: "10px",
+                fontWeight: 800,
+                padding: "2px 6px",
+                borderRadius: "6px",
+                backgroundColor: isHard
+                  ? isOffice
+                    ? "#fee2e2"
+                    : "rgba(220,38,38,0.28)"
+                  : isOffice
+                    ? "#fef3c7"
+                    : "rgba(245,158,11,0.22)",
+                color: isHard
+                  ? isOffice
+                    ? "#b91c1c"
+                    : "#fca5a5"
+                  : isOffice
+                    ? "#b45309"
+                    : "#fcd34d",
+              }}
+            >
+              {isHard ? "ZOR" : "ORTA"}
             </span>
             <span style={styles.divider}>•</span>
             <span style={{ color: isOffice ? "#475569" : "#f87171", fontSize: "12px", fontWeight: 600 }}>

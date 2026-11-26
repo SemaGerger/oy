@@ -264,7 +264,7 @@ export function loginLocalUser(
 export async function loginOrRegisterGoogleUser(
   idToken: unknown
 ): Promise<{ ok: boolean; error?: string; token?: string; user?: { id: string; username: string; email: string } }> {
-  const expectedClientId = process.env.GOOGLE_CLIENT_ID;
+  const expectedClientId = process.env.GOOGLE_CLIENT_ID?.trim();
   if (!expectedClientId) {
     return {
       ok: false,
@@ -283,7 +283,9 @@ export async function loginOrRegisterGoogleUser(
       return { ok: false, error: "Google oturumu doğrulanamadı." };
     }
     const data = (await resp.json()) as Record<string, unknown>;
-    if (data.aud !== expectedClientId || data.email_verified !== "true") {
+    const isVerified = data.email_verified === "true" || data.email_verified === true;
+    if (data.aud !== expectedClientId || !isVerified) {
+      console.warn("[AUTH] Google token aud/verified mismatch");
       return { ok: false, error: "Google token uygulama kimliği eşleşmedi." };
     }
 

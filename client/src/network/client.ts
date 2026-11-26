@@ -15,6 +15,7 @@ let activeRoom: Room | null = null;
 export interface JoinOptions {
   token: string;
   gameMode: "coop" | "pvp";
+  difficulty?: "medium" | "hard";
   roomCode?: string;
   createNew?: boolean;
 }
@@ -24,22 +25,25 @@ export const joinGameRoom = async (options: JoinOptions): Promise<Room> => {
     activeRoom.leave();
   }
 
-  const { token, gameMode, roomCode, createNew } = options;
+  const { token, gameMode, difficulty = "medium", roomCode, createNew } = options;
 
   if (roomCode && roomCode.trim() !== "") {
     activeRoom = await colyseusClient.joinById(roomCode.trim(), {
       token,
       gameMode,
+      difficulty,
     });
   } else if (createNew) {
     activeRoom = await colyseusClient.create("game_room", {
       token,
       gameMode,
+      difficulty,
     });
   } else {
     activeRoom = await colyseusClient.joinOrCreate("game_room", {
       token,
       gameMode,
+      difficulty,
     });
   }
 
