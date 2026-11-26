@@ -62,3 +62,12 @@ Aşağıdaki güvenlik açıkları tespit edilip kapatılmıştır; yeni eklenec
 4. **Bellek Sızıntısı (Memory Leak) Önleme:**
    - Phaser sahnesinde (`GameScene.ts`) odadan ayrılan oyuncu, yok olan düşman, mermi ve altınların `Container` nesneleri mutlaka `.destroy()` ile temizlenmelidir.
    - React `useEffect` kancalarında açılan tüm `EventBus.on` dinleyicileri ve `setInterval` zamanlayıcıları cleanup fonksiyonunda (`EventBus.off`, `clearInterval`) kapatılmalıdır.
+
+---
+
+## 6. Mobil Uyumluluk Zorunluluğu (Mobile-Playable Mandate)
+
+- **Tüm Oyunlar Mobilde Oynanabilir Olmalıdır:** Portalda eklenecek her yeni oyun mutlaka **dokunmatik (touch / sürükleme / sanal joystick)** kontrol desteğiyle tasarlanmalı, sadece klavyeye bağımlı olmamalıdır.
+- **Responsive HUD & Canvas:** Oyun `canvas` öğesinde `touch-action: none` ve sayfada `overscroll-behavior: none` zorunludur; mobil ekranlarda (`<768px`) sohbet varsayılan kapalı, skor tablosu kompakt ve masaüstü klavye ipuçları gizli olmalıdır.
+- **Ofis (Light) ve Eğlence (Dark) Tema Desteği:** Yeni eklenecek tüm oyunlar `ThemeContext` (`isOffice`) ile uyumlu olmalıdır.
+

@@ -20,7 +20,7 @@ import { useTheme } from "../theme/ThemeContext";
 
 interface PortalHomeProps {
   user: AuthUser | null;
-  onSelectGame: (gameId: string) => void;
+  onSelectGame: (gameId: string, playMode: "solo" | "multiplayer") => void;
   onOpenAuth: () => void;
   onLogout: () => void;
 }
@@ -121,7 +121,7 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                 boxShadow: isOffice ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
               }}
             >
-              <Sun size={13} /> Ofis Modu
+              <Sun size={13} /> Açık Mod
             </button>
           </div>
 
@@ -171,13 +171,13 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
 
       {/* Main Content */}
       <main style={styles.mainContent}>
-        {/* Stealth Office Mode Tip Banner */}
+        {/* Stealth Light Mode Tip Banner */}
         {isOffice && (
           <div style={styles.officeTipBar}>
             <Briefcase size={15} color="#2563eb" />
             <span>
-              <b>Ofis Modu Aktif (Light):</b> Ekranınız kurumsal çalışma alanı görünümündedir.
-              Oyun içinde de <b>Shift + O</b> tuşuyla anında Ofis / Eğlence modu arasında geçiş yapabilirsiniz.
+              <b>Açık Mod Aktif:</b> Ekranınız sade çalışma alanı görünümündedir.
+              Oyun içinde de <b>Shift + O</b> tuşuyla anında Açık / Eğlence modu arasında geçiş yapabilirsiniz.
             </span>
           </div>
         )}
@@ -256,16 +256,34 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                 <Link2 size={14} color={isOffice ? "#64748b" : "#f59e0b"} /> Oda Koduyla Davet
               </span>
             </div>
-            <button
-              onClick={() => onSelectGame(firstGame.id)}
-              style={{
-                ...styles.heroPlayBtn,
-                backgroundColor: isOffice ? "#2563eb" : "#f05232",
-                borderBottom: isOffice ? "3px solid #1d4ed8" : "4px solid #c93b1e",
-              }}
-            >
-              <Play size={18} fill="#ffffff" /> {isOffice ? "Çalışma Alanını Aç" : "HEMEN OYNA"}
-            </button>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "6px" }}>
+              <button
+                onClick={() => onSelectGame(firstGame.id, "solo")}
+                style={{
+                  ...styles.heroPlayBtn,
+                  marginTop: 0,
+                  backgroundColor: isOffice ? "#2563eb" : "#f05232",
+                  borderBottom: isOffice ? "3px solid #1d4ed8" : "4px solid #c93b1e",
+                }}
+              >
+                <Play size={17} fill="#ffffff" />{" "}
+                {isOffice ? "Tek Kişilik Başlat" : "Tek Kişilik Oyna"}
+              </button>
+
+              <button
+                onClick={() => onSelectGame(firstGame.id, "multiplayer")}
+                style={{
+                  ...styles.heroPlayBtn,
+                  marginTop: 0,
+                  backgroundColor: isOffice ? "#f1f5f9" : "#2f3d36",
+                  color: isOffice ? "#0f172a" : "#ffffff",
+                  border: isOffice ? "1px solid #cbd5e1" : "1px solid #4a5d53",
+                  borderBottom: isOffice ? "3px solid #cbd5e1" : "4px solid #1b2420",
+                }}
+              >
+                <Users size={17} /> {isOffice ? "Ekip Odası (Çoklu)" : "Çok Oyunculu"}
+              </button>
+            </div>
           </div>
 
           {/* Preview Box (Adapts to Office Diagram vs Dark Courtyard Arena) */}
@@ -275,8 +293,8 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
               backgroundColor: isOffice ? "#f8fafc" : "#2f3d36",
               border: isOffice ? "1px solid #cbd5e1" : "3px solid #3f5047",
             }}
-            onClick={() => onSelectGame(firstGame.id)}
-            title="Başlatmak için tıkla"
+            onClick={() => onSelectGame(firstGame.id, "solo")}
+            title="Tek kişilik hemen başlatmak için tıkla"
           >
             <div
               style={{
@@ -367,17 +385,19 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
             {GAMES_REGISTRY.map((game) => (
               <div
                 key={game.id}
-                onClick={() => onSelectGame(game.id)}
                 style={{
                   ...styles.card,
+                  cursor: "default",
                   backgroundColor: isOffice ? "#ffffff" : "#1e1f24",
                   border: isOffice ? "1px solid #cbd5e1" : "1px solid #2e3038",
                   borderBottom: isOffice ? "2px solid #cbd5e1" : "4px solid #121317",
                 }}
               >
                 <div
+                  onClick={() => onSelectGame(game.id, "solo")}
                   style={{
                     ...styles.cardThumb,
+                    cursor: "pointer",
                     backgroundColor: isOffice ? "#f1f5f9" : game.gradient,
                   }}
                 >
@@ -415,7 +435,7 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                       border: isOffice ? "1px solid #e2e8f0" : "none",
                     }}
                   >
-                    {isOffice ? "Ekip Modülü" : game.category}
+                    {isOffice ? "Tek & Ekip" : "Tek & Çok Oyunculu"}
                   </span>
                 </div>
 
@@ -440,25 +460,41 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                     style={{
                       ...styles.cardFooter,
                       borderTop: isOffice ? "1px solid #f1f5f9" : "1px solid #2e3038",
+                      gap: "8px",
                     }}
                   >
-                    <span
-                      style={{
-                        ...styles.playersLabel,
-                        color: isOffice ? "#64748b" : "#9ca3af",
-                      }}
-                    >
-                      <Users size={13} /> {game.playersText}
-                    </span>
-                    <span
+                    <button
+                      type="button"
+                      onClick={() => onSelectGame(game.id, "solo")}
                       style={{
                         ...styles.playPill,
+                        border: "none",
+                        cursor: "pointer",
+                        flex: 1,
+                        justifyContent: "center",
+                        fontFamily: "inherit",
                         backgroundColor: isOffice ? "#2563eb" : "#f05232",
                         borderBottom: isOffice ? "2px solid #1d4ed8" : "2px solid #c93b1e",
                       }}
                     >
-                      <Play size={12} fill="#ffffff" /> {isOffice ? "Aç" : "Oyna"}
-                    </span>
+                      <Play size={12} fill="#ffffff" /> Tek Kişilik
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSelectGame(game.id, "multiplayer")}
+                      style={{
+                        ...styles.playPill,
+                        cursor: "pointer",
+                        flex: 1,
+                        justifyContent: "center",
+                        fontFamily: "inherit",
+                        backgroundColor: isOffice ? "#f1f5f9" : "#27282e",
+                        color: isOffice ? "#0f172a" : "#ffffff",
+                        border: isOffice ? "1px solid #cbd5e1" : "1px solid #3f3f46",
+                      }}
+                    >
+                      <Users size={12} /> Çok Oyunculu
+                    </button>
                   </div>
                 </div>
               </div>

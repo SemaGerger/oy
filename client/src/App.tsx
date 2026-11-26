@@ -2,26 +2,30 @@ import React, { useState, useEffect, useRef } from "react";
 import { Room } from "colyseus.js";
 import { joinGameRoom, JoinOptions } from "./network/client";
 import { AuthUser, fetchCurrentUser, clearToken } from "./network/authClient";
-import { createPhaserGame } from "./game/main";
+import { createPhaserGame, createSoloPhaserGame } from "./game/main";
 import { HUD } from "./ui/HUD";
+import { SoloHUD } from "./ui/SoloHUD";
 import { LoginScreen } from "./ui/LoginScreen";
 import { AuthScreen } from "./ui/AuthScreen";
 import { PortalHome } from "./portal/PortalHome";
-import { GAMES_REGISTRY } from "./portal/gamesRegistry";
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [showAuthScreen, setShowAuthScreen] = useState(false);
 
-  const [selectedGameId, setSelectedGameId] = useState<string | null>(() => {
+  const hasInviteRoom = (() => {
     const params = new URLSearchParams(window.location.search);
     const codeFromUrl = params.get("room");
-    if (codeFromUrl && /^[a-zA-Z0-9_-]{1,24}$/.test(codeFromUrl)) {
-      return "survival-arena-2d";
-    }
-    return null;
-  });
+    return Boolean(codeFromUrl && /^[a-zA-Z0-9_-]{1,24}$/.test(codeFromUrl));
+  })();
+
+  const [selectedGameId, setSelectedGameId] = useState<string | null>(
+    hasInviteRoom ? "survival-arena-2d" : null
+  );
+  const [playMode, setPlayMode] = useState<"solo" | "multiplayer">(
+    hasInviteRoom ? "multiplayer" : "solo"
+  );
 
   const [room, setRoom] = useState<Room | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -30,7 +34,7 @@ export const App: React.FC = () => {
   const phaserContainerRef = useRef<HTMLDivElement>(null);
   const gameInstanceRef = useRef<Phaser.Game | null>(null);
 
-  // Silently restore saved session in the background without blocking landing page
+  // Silently restore saved session in the background
   useEffect(() => {
     let active = true;
     fetchCurrentUser().then((session) => {
@@ -45,6 +49,13 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  const destroyPhaser = () => {
+    if (gameInstanceRef.current) {
+      gameInstanceRef.current.destroy(true);
+      gameInstanceRef.current = null;
+    }
+  };
+
   const handleAuthenticated = (authUser: AuthUser, authToken: string) => {
     setUser(authUser);
     setToken(authToken);
@@ -56,10 +67,7 @@ export const App: React.FC = () => {
       room.leave();
       setRoom(null);
     }
-    if (gameInstanceRef.current) {
-      gameInstanceRef.current.destroy(true);
-      gameInstanceRef.current = null;
-    }
+    destroyPhaser();
     clearToken();
     setUser(null);
     setToken(null);
@@ -67,8 +75,14 @@ export const App: React.FC = () => {
     setShowAuthScreen(false);
   };
 
-  const handleSelectGame = (gameId: string) => {
+  const handleSelectGame = (gameId: string, mode: "solo" | "multiplayer") => {
+    if (room) {
+      room.leave();
+      setRoom(null);
+    }
+    destroyPhaser();
     setError(null);
+    setPlayMode(mode);
     setSelectedGameId(gameId);
   };
 
@@ -100,36 +114,42 @@ export const App: React.FC = () => {
       room.leave();
       setRoom(null);
     }
-    if (gameInstanceRef.current) {
-      gameInstanceRef.current.destroy(true);
-      gameInstanceRef.current = null;
-    }
+    destroyPhaser();
     setError(null);
     setSelectedGameId(null);
     setShowAuthScreen(false);
   };
 
+  // Mount Solo Phaser Scene
   useEffect(() => {
-    if (room && phaserContainerRef.current && !gameInstanceRef.current) {
+    if (selectedGameId && playMode === "solo" && phaserContainerRef.current && !gameInstanceRef.current) {
+      gameInstanceRef.current = createSoloPhaserGame(phaserContainerRef.current);
+    }
+    return () => {
+      if (playMode === "solo") {
+        destroyPhaser();
+      }
+    };
+  }, [selectedGameId, playMode]);
+
+  // Mount Multiplayer Phaser Scene
+  useEffect(() => {
+    if (playMode === "multiplayer" && room && phaserContainerRef.current && !gameInstanceRef.current) {
       gameInstanceRef.current = createPhaserGame(phaserContainerRef.current, room);
 
       room.onLeave((code) => {
         console.log("Disconnected from room with code:", code);
         setRoom(null);
-        if (gameInstanceRef.current) {
-          gameInstanceRef.current.destroy(true);
-          gameInstanceRef.current = null;
-        }
+        destroyPhaser();
       });
     }
 
     return () => {
-      if (gameInstanceRef.current) {
-        gameInstanceRef.current.destroy(true);
-        gameInstanceRef.current = null;
+      if (playMode === "multiplayer") {
+        destroyPhaser();
       }
     };
-  }, [room]);
+  }, [room, playMode]);
 
   // Explicit Auth Screen opened from Navbar
   if (showAuthScreen && (!user || !token)) {
@@ -153,25 +173,40 @@ export const App: React.FC = () => {
     );
   }
 
-  // 2. Check if selected game requires authentication (Multiplayer games)
-  const selectedGame = GAMES_REGISTRY.find((g) => g.id === selectedGameId);
-  if (selectedGame?.requiresAuth && (!user || !token)) {
+  // 2. Solo Mode (Instant, zero login required!)
+  if (playMode === "solo") {
+    return (
+      <div style={{ width: "100%", height: "100%", position: "relative" }}>
+        <div
+          ref={phaserContainerRef}
+          style={{ width: "100%", height: "100%", position: "absolute", inset: 0 }}
+        />
+        <SoloHUD
+          onBackToPortal={handleBackToPortal}
+          onSwitchToMultiplayer={() => handleSelectGame(selectedGameId, "multiplayer")}
+        />
+      </div>
+    );
+  }
+
+  // 3. Multiplayer Mode: Requires login/registration
+  if (!user || !token) {
     return (
       <AuthScreen
         onAuthenticated={handleAuthenticated}
         onBackToPortal={handleBackToPortal}
-        reasonText={`${selectedGame.title} çok oyunculu bir oyundur. Oynamak için giriş yapın.`}
+        reasonText="Çok oyunculu moda katılmak için hesabınla giriş yap. (Tek kişilik mod girişsiz oynanabilir.)"
       />
     );
   }
 
-  // 3. Game #1: Survival Arena 2D
+  // 4. Multiplayer Lobby & Game
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
       {!room ? (
         <LoginScreen
-          user={user!}
-          token={token!}
+          user={user}
+          token={token}
           onJoin={handleJoin}
           isLoading={isLoading}
           error={error}

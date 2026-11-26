@@ -73,9 +73,16 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [killFeed, setKillFeed] = useState<KillFeedItem[]>([]);
   const [chatInput, setChatInput] = useState("");
-  const [showChat, setShowChat] = useState(true);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const [showChat, setShowChat] = useState(() => window.innerWidth >= 768);
   const [copied, setCopied] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     const handlePlayersUpdate = (list: PlayerInfo[]) => {
@@ -197,10 +204,10 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
               border: panelBorder,
               color: panelText,
             }}
-            title="Anında Ofis (Light) / Eğlence (Dark) modu değiştir (Kısayol: Shift + O)"
+            title="Anında Açık Mod / Eğlence Modu değiştir (Kısayol: Shift + O)"
           >
             {isOffice ? <Moon size={14} color="#2563eb" /> : <Sun size={14} color="#fbbf24" />}
-            <span>{isOffice ? "Eğlence Modu" : "Ofis Modu"}</span>
+            <span>{isOffice ? "Eğlence Modu" : "Açık Mod"}</span>
           </button>
 
           <div
@@ -354,6 +361,9 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
       <div
         style={{
           ...styles.leaderboard,
+          width: isMobile ? "158px" : "230px",
+          top: isMobile ? "112px" : "64px",
+          padding: isMobile ? "8px" : "12px",
           backgroundColor: panelBg,
           border: panelBorder,
           color: panelText,
@@ -365,13 +375,13 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
             borderBottom: isOffice ? "1px solid #e2e8f0" : "1px solid #292524",
           }}
         >
-          {!isOffice && <Trophy size={15} color="#fbbf24" />}
-          <span style={{ fontWeight: 800, fontSize: "12px" }}>
-            {isOffice ? "PERFORMANS ÖZETİ" : "SKOR & AV TABLOSU"}
+          {!isOffice && <Trophy size={14} color="#fbbf24" />}
+          <span style={{ fontWeight: 800, fontSize: isMobile ? "10px" : "12px" }}>
+            {isOffice ? "PERFORMANS ÖZETİ" : "SKOR TABLOSU"}
           </span>
         </div>
         <div style={styles.leaderboardList}>
-          {players.slice(0, 8).map((p, index) => (
+          {players.slice(0, isMobile ? 4 : 8).map((p, index) => (
             <div
               key={p.id}
               style={{
@@ -388,11 +398,11 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
                   : "3px solid transparent",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "5px", overflow: "hidden" }}>
                 <span
                   style={{
                     color: index < 3 ? (isOffice ? "#2563eb" : "#fbbf24") : "#64748b",
-                    fontSize: "12px",
+                    fontSize: "11px",
                     width: "16px",
                     fontWeight: 700,
                   }}
@@ -406,18 +416,24 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
                         ? "#1d4ed8"
                         : "#fbbf24"
                       : panelText,
-                    fontSize: "12px",
+                    fontSize: "11px",
                     fontWeight: p.isLocal ? 800 : 500,
                     textDecoration: p.isDead ? "line-through" : "none",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    maxWidth: isMobile ? "66px" : "100px",
                   }}
                 >
                   {p.name}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-                <span style={{ color: isOffice ? "#64748b" : "#f87171" }}>
-                  {isOffice ? `${p.kills} işlem` : `💀 ${p.kills}`}
-                </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+                {!isMobile && (
+                  <span style={{ color: isOffice ? "#64748b" : "#f87171" }}>
+                    {isOffice ? `${p.kills} işlem` : `💀 ${p.kills}`}
+                  </span>
+                )}
                 <span
                   style={{
                     color: isOffice ? "#0f172a" : "#fbbf24",
@@ -432,45 +448,47 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
         </div>
       </div>
 
-      {/* Controls Hint (Bottom Right) */}
-      <div
-        style={{
-          ...styles.controlsHint,
-          backgroundColor: panelBg,
-          border: panelBorder,
-          color: panelText,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-          <Compass size={13} color={isOffice ? "#2563eb" : "#fbbf24"} />
-          <span
-            style={{
-              fontWeight: 800,
-              fontSize: "11px",
-              color: isOffice ? "#64748b" : "#a8a29e",
-            }}
-          >
-            {isOffice ? "KISAYOLLAR" : "SAVAŞ KONTROLLERİ"}
-          </span>
-        </div>
+      {/* Controls Hint (Desktop Only — hidden on mobile to keep touch area clear) */}
+      {!isMobile && (
         <div
           style={{
-            fontSize: "11px",
-            color: isOffice ? "#475569" : "#d6d3d1",
-            lineHeight: 1.5,
+            ...styles.controlsHint,
+            backgroundColor: panelBg,
+            border: panelBorder,
+            color: panelText,
           }}
         >
-          <div>
-            <kbd style={styles.kbd}>W A S D</kbd> / <kbd style={styles.kbd}>Oklar</kbd> : Hareket
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+            <Compass size={13} color={isOffice ? "#2563eb" : "#fbbf24"} />
+            <span
+              style={{
+                fontWeight: 800,
+                fontSize: "11px",
+                color: isOffice ? "#64748b" : "#a8a29e",
+              }}
+            >
+              {isOffice ? "KISAYOLLAR" : "SAVAŞ KONTROLLERİ"}
+            </span>
           </div>
-          <div style={{ marginTop: "3px" }}>
-            <kbd style={styles.kbd}>Sol Tık</kbd> / <kbd style={styles.kbd}>Boşluk</kbd> : Ateş Et
-          </div>
-          <div style={{ marginTop: "3px" }}>
-            <kbd style={styles.kbd}>Shift + O</kbd> : Ofis / Eğlence Modu
+          <div
+            style={{
+              fontSize: "11px",
+              color: isOffice ? "#475569" : "#d6d3d1",
+              lineHeight: 1.5,
+            }}
+          >
+            <div>
+              <kbd style={styles.kbd}>Sürükle</kbd> / <kbd style={styles.kbd}>W A S D</kbd> : Hareket
+            </div>
+            <div style={{ marginTop: "3px" }}>
+              <kbd style={styles.kbd}>Otomatik</kbd> : En yakın düşmana ateş eder
+            </div>
+            <div style={{ marginTop: "3px" }}>
+              <kbd style={styles.kbd}>Shift + O</kbd> : Açık / Eğlence Modu
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Chat Box (Bottom Left) */}
       <div

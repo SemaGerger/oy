@@ -81,40 +81,39 @@ export class GameRoom extends Room<GameState> {
       this.spawnEnemy();
     }
 
-    // 1. Movement & continuous shooting state (Strict input validation)
+    // 1. Movement (WASD / Arrows OR Analog Drag dx/dy — strictly validated)
     this.onMessage("move", (client: Client, data: unknown) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || !this.isPacketAllowed(client, player) || player.isDead) return;
       if (!data || typeof data !== "object") return;
 
       const payload = data as Record<string, unknown>;
-      const left = Boolean(payload.left);
-      const right = Boolean(payload.right);
-      const up = Boolean(payload.up);
-      const down = Boolean(payload.down);
-
       let dx = 0;
       let dy = 0;
-      if (left) dx -= 1;
-      if (right) dx += 1;
-      if (up) dy -= 1;
-      if (down) dy += 1;
 
-      if (dx !== 0 && dy !== 0) {
-        const factor = 1 / Math.SQRT2;
-        dx *= factor;
-        dy *= factor;
+      if (isValidFiniteNumber(payload.dx) && isValidFiniteNumber(payload.dy)) {
+        dx = payload.dx;
+        dy = payload.dy;
+        const mag = Math.hypot(dx, dy);
+        if (mag > 1) {
+          dx /= mag;
+          dy /= mag;
+        }
+      } else {
+        if (Boolean(payload.left)) dx -= 1;
+        if (Boolean(payload.right)) dx += 1;
+        if (Boolean(payload.up)) dy -= 1;
+        if (Boolean(payload.down)) dy += 1;
+
+        if (dx !== 0 && dy !== 0) {
+          const factor = 1 / Math.SQRT2;
+          dx *= factor;
+          dy *= factor;
+        }
       }
 
       player.vx = dx * player.speed;
       player.vy = dy * player.speed;
-
-      if (isValidFiniteNumber(payload.rotation)) {
-        player.rotation = normalizeAngle(payload.rotation);
-      }
-      if (typeof payload.shooting === "boolean") {
-        player.isShooting = payload.shooting;
-      }
     });
 
     // 2. Single click shoot message (Strict finite angle check)
@@ -338,6 +337,50 @@ export class GameRoom extends Room<GameState> {
     });
   }
 
+  private autoAimAndShoot(player: Player) {
+    const maxRangeSq = 560 * 560;
+    let nearestX = 0;
+    let nearestY = 0;
+    let minDistSq = maxRangeSq;
+    let foundTarget = false;
+
+    // 1. Check all enemies
+    this.state.enemies.forEach((enemy) => {
+      const dx = enemy.x - player.x;
+      const dy = enemy.y - player.y;
+      const dSq = dx * dx + dy * dy;
+      if (dSq < minDistSq) {
+        minDistSq = dSq;
+        nearestX = enemy.x;
+        nearestY = enemy.y;
+        foundTarget = true;
+      }
+    });
+
+    // 2. In PvP mode, also check other living players
+    if (this.state.gameMode === "pvp") {
+      this.state.players.forEach((other, otherId) => {
+        if (otherId === player.id || other.isDead) return;
+        const dx = other.x - player.x;
+        const dy = other.y - player.y;
+        const dSq = dx * dx + dy * dy;
+        if (dSq < minDistSq) {
+          minDistSq = dSq;
+          nearestX = other.x;
+          nearestY = other.y;
+          foundTarget = true;
+        }
+      });
+    }
+
+    if (foundTarget) {
+      player.rotation = Math.atan2(nearestY - player.y, nearestX - player.x);
+      this.tryShoot(player);
+    } else if (player.vx !== 0 || player.vy !== 0) {
+      player.rotation = Math.atan2(player.vy, player.vx);
+    }
+  }
+
   private tryShoot(player: Player) {
     const now = Date.now();
     if (now - player.lastShootTime < 170) return;
@@ -502,9 +545,8 @@ export class GameRoom extends Room<GameState> {
       player.x = Math.max(25, Math.min(this.state.mapWidth - 25, player.x));
       player.y = Math.max(25, Math.min(this.state.mapHeight - 25, player.y));
 
-      if (player.isShooting) {
-        this.tryShoot(player);
-      }
+      // Auto-aim at nearest enemy (or nearest rival player in PvP) and auto-shoot
+      this.autoAimAndShoot(player);
 
       this.state.coins.forEach((coin, coinId) => {
         const dx = player.x - coin.x;

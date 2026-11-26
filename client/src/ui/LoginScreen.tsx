@@ -199,12 +199,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           <div style={styles.howToTitle}>KONTROLLER</div>
           <div style={styles.howToGrid}>
             <div>
-              <b>Hareket:</b> <span style={styles.keyTag}>W A S D</span> veya{" "}
-              <span style={styles.keyTag}>Ok Tuşları</span>
+              <b>Hareket:</b> <span style={styles.keyTag}>Mouse ile Sürükle</span> veya{" "}
+              <span style={styles.keyTag}>W A S D</span>
             </div>
             <div>
-              <b>Ateş Etme:</b> <span style={styles.keyTag}>Sol Tık</span> veya{" "}
-              <span style={styles.keyTag}>Boşluk</span>
+              <b>Ateş Etme:</b> Otomatik! Karakter en yakın düşmana döner ve ateş eder.
             </div>
             <div>
               <b>Siper & Can:</b> Engeller mermileri durdurur, yerdeki küreler +8 HP verir.

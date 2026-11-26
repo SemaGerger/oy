@@ -61,13 +61,17 @@ export class GameScene extends Phaser.Scene {
   };
 
   private lastInput = {
-    left: false,
-    right: false,
-    up: false,
-    down: false,
-    rotation: 0,
-    shooting: false,
+    dx: 0,
+    dy: 0,
   };
+
+  private isDragging = false;
+  private dragOriginX = 0;
+  private dragOriginY = 0;
+  private dragDx = 0;
+  private dragDy = 0;
+  private joyBase: Phaser.GameObjects.Arc | null = null;
+  private joyThumb: Phaser.GameObjects.Arc | null = null;
 
   constructor(room?: Room) {
     super("GameScene");
@@ -100,22 +104,84 @@ export class GameScene extends Phaser.Scene {
       }) as any;
     }
 
-    // Left click instant shoot
+    // Floating virtual joystick visual (fixed to screen via scrollFactor 0)
+    this.joyBase = this.add
+      .circle(0, 0, 44, 0xffffff, 0.14)
+      .setStrokeStyle(2, 0xffffff, 0.35)
+      .setScrollFactor(0)
+      .setDepth(100)
+      .setVisible(false);
+
+    this.joyThumb = this.add
+      .circle(0, 0, 18, 0xf05232, 0.78)
+      .setStrokeStyle(2, 0xffffff, 0.85)
+      .setScrollFactor(0)
+      .setDepth(101)
+      .setVisible(false);
+
+    // Drag-to-move (Mouse or Touch) — character auto-aims & auto-shoots!
+    const maxJoyRadius = 48;
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (pointer.leftButtonDown() && this.room) {
-        const localVisual = this.playerVisuals.get(this.room.sessionId);
-        if (localVisual) {
-          const worldPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-          const rot = Phaser.Math.Angle.Between(
-            localVisual.container.x,
-            localVisual.container.y,
-            worldPt.x,
-            worldPt.y
-          );
-          this.room.send("shoot", rot);
+      if (pointer.leftButtonDown() || pointer.wasTouch) {
+        this.isDragging = true;
+        this.dragOriginX = pointer.x;
+        this.dragOriginY = pointer.y;
+        this.dragDx = 0;
+        this.dragDy = 0;
+
+        if (this.joyBase && this.joyThumb) {
+          const isOffice = this.currentTheme === "office";
+          this.joyBase
+            .setPosition(pointer.x, pointer.y)
+            .setFillStyle(isOffice ? 0x64748b : 0xffffff, isOffice ? 0.12 : 0.14)
+            .setStrokeStyle(2, isOffice ? 0x64748b : 0xffffff, 0.35)
+            .setVisible(true);
+          this.joyThumb
+            .setPosition(pointer.x, pointer.y)
+            .setFillStyle(isOffice ? 0x2563eb : 0xf05232, 0.75)
+            .setVisible(true);
         }
       }
     });
+
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (!this.isDragging) return;
+      const rawDx = pointer.x - this.dragOriginX;
+      const rawDy = pointer.y - this.dragOriginY;
+      const dist = Math.hypot(rawDx, rawDy);
+
+      if (dist > 6) {
+        const clamped = Math.min(dist, maxJoyRadius);
+        const nx = rawDx / dist;
+        const ny = rawDy / dist;
+        this.dragDx = nx * (clamped / maxJoyRadius);
+        this.dragDy = ny * (clamped / maxJoyRadius);
+
+        if (this.joyThumb) {
+          this.joyThumb.setPosition(
+            this.dragOriginX + nx * clamped,
+            this.dragOriginY + ny * clamped
+          );
+        }
+      } else {
+        this.dragDx = 0;
+        this.dragDy = 0;
+        if (this.joyThumb) {
+          this.joyThumb.setPosition(this.dragOriginX, this.dragOriginY);
+        }
+      }
+    });
+
+    const stopDrag = () => {
+      this.isDragging = false;
+      this.dragDx = 0;
+      this.dragDy = 0;
+      this.joyBase?.setVisible(false);
+      this.joyThumb?.setVisible(false);
+    };
+
+    this.input.on("pointerup", stopDrag);
+    this.input.on("pointerupoutside", stopDrag);
 
     this.mapW = this.room?.state?.mapWidth || 2200;
     this.mapH = this.room?.state?.mapHeight || 2200;
@@ -760,38 +826,32 @@ export class GameScene extends Phaser.Scene {
       visual.container.y = Phaser.Math.Linear(visual.container.y, visual.targetY, 0.55);
     });
 
-    // 4. Local Player Input
-    if (this.room && this.cursors && this.wasdKeys) {
-      const left = this.cursors.left.isDown || this.wasdKeys.A.isDown;
-      const right = this.cursors.right.isDown || this.wasdKeys.D.isDown;
-      const up = this.cursors.up.isDown || this.wasdKeys.W.isDown;
-      const down = this.cursors.down.isDown || this.wasdKeys.S.isDown;
+    // 4. Local Player Input (Drag-to-move OR WASD / Arrows — auto-aim & auto-shoot handled by server)
+    if (this.room) {
+      let dx = 0;
+      let dy = 0;
 
-      const pointer = this.input.activePointer;
-      const shooting = pointer.leftButtonDown() || this.wasdKeys.SPACE.isDown;
-
-      const localVisual = this.playerVisuals.get(this.room.sessionId);
-      let rotation = this.lastInput.rotation;
-      if (localVisual) {
-        const worldPointer = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-        rotation = Phaser.Math.Angle.Between(
-          localVisual.container.x,
-          localVisual.container.y,
-          worldPointer.x,
-          worldPointer.y
-        );
-        localVisual.turretContainer.rotation = rotation;
+      if (this.isDragging) {
+        dx = this.dragDx;
+        dy = this.dragDy;
+      } else if (this.cursors && this.wasdKeys) {
+        if (this.cursors.left.isDown || this.wasdKeys.A.isDown) dx -= 1;
+        if (this.cursors.right.isDown || this.wasdKeys.D.isDown) dx += 1;
+        if (this.cursors.up.isDown || this.wasdKeys.W.isDown) dy -= 1;
+        if (this.cursors.down.isDown || this.wasdKeys.S.isDown) dy += 1;
+        if (dx !== 0 && dy !== 0) {
+          const inv = 1 / Math.SQRT2;
+          dx *= inv;
+          dy *= inv;
+        }
       }
 
       if (
-        left !== this.lastInput.left ||
-        right !== this.lastInput.right ||
-        up !== this.lastInput.up ||
-        down !== this.lastInput.down ||
-        shooting !== this.lastInput.shooting ||
-        Math.abs(rotation - this.lastInput.rotation) > 0.04
+        Math.abs(dx - this.lastInput.dx) > 0.03 ||
+        Math.abs(dy - this.lastInput.dy) > 0.03 ||
+        (dx === 0 && dy === 0 && (this.lastInput.dx !== 0 || this.lastInput.dy !== 0))
       ) {
-        this.lastInput = { left, right, up, down, rotation, shooting };
+        this.lastInput = { dx, dy };
         this.room.send("move", this.lastInput);
       }
     }
