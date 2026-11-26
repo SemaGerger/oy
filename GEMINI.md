@@ -71,3 +71,24 @@ Aşağıdaki güvenlik açıkları tespit edilip kapatılmıştır; yeni eklenec
 - **Responsive HUD & Canvas:** Oyun `canvas` öğesinde `touch-action: none` ve sayfada `overscroll-behavior: none` zorunludur; mobil ekranlarda (`<768px`) sohbet varsayılan kapalı, skor tablosu kompakt ve masaüstü klavye ipuçları gizli olmalıdır.
 - **Ofis (Light) ve Eğlence (Dark) Tema Desteği:** Yeni eklenecek tüm oyunlar `ThemeContext` (`isOffice`) ile uyumlu olmalıdır.
 
+---
+
+## 7. Yayınlama (Deploy) Bildirimi ve Panel Yolları Zorunluluğu
+
+Her kod değişikliği veya yeni özellik tamamlandığında, kullanıcıya **mutlaka** hangi adımların gerektiğini ve ilgili panel yollarını (tıklanabilir linkleriyle) açıkça bildir:
+
+1. **İstemci (`client/`) Değiştiyse — Cloudflare Workers (`client/dist`):**
+   - Önce `npm run build --workspace=client` çalıştırıp `client/dist` klasörünü taze derle.
+   - Kullanıcıya şu yolu söyle:
+     - **Panel:** `https://dash.cloudflare.com/3cabbf9b4a1f86a9780c6896fff8a7ae/workers/services/view/rapid-moon-a6a3/production`
+     - **Adım:** `Deployments` / `New deployment` ➔ `c:\Users\SEMA.GERGER\Documents\GitHub\oy\client\dist` klasörünü yükle.
+2. **Sunucu (`server/`) Değiştiyse — GitHub + Render:**
+   - Önce `npm run build --workspace=server` ile sıfır hata olduğunu doğrula.
+   - Kullanıcıya `git add -A; git commit -m "..."; git push` komutunu ve şu panel yolunu söyle:
+     - **Panel:** `https://dashboard.render.com/web/srv-dc3e2467bikc73cu7h2g`
+     - **Adım:** `Manual Deploy` ➔ `Deploy latest commit`
+3. **Canlı Doğrulama Linkleri:**
+   - **Oyun Sitesi:** `https://game.sitecont.io`
+   - **Sunucu Sağlık Kontrolü:** `https://sitecont-game-server.onrender.com/health`
+
+

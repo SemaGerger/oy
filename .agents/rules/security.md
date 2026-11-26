@@ -32,3 +32,10 @@ Bu projede geliştirilen tüm istemci (React + Phaser) ve sunucu (Node.js + Coly
 - **Zorunlu Derleme Kontrolü:** Her kod değişikliğinden sonra hem sunucu (`npm run build --workspace=server`) hem istemci (`npx tsc --noEmit --project client/tsconfig.json`) derlenerek sıfır hata olduğu doğrulanmalıdır.
 - **PowerShell Uyumluluğu:** Terminal komutları birleştirilirken `&&` yerine `;` kullanılmalıdır.
 - **Bellek Sızıntısı Önleme:** Phaser nesneleri odadan çıkıldığında veya silindiğinde `.destroy()` ile yok edilmeli, React `useEffect` içindeki `EventBus.on` dinleyicileri cleanup içinde `EventBus.off` ile kaldırılmalıdır.
+
+## 6. Yayınlama (Deploy) Bildirimi ve Panel Yolları Zorunluluğu
+Her kod değişikliğinden sonra kullanıcıya hangi tarafın (`client/dist` ve/veya `server`) yayınlanması gerektiğini ve doğrudan panel yollarını mutlaka belirt:
+- **Cloudflare Workers (`client/dist`):** `https://dash.cloudflare.com/3cabbf9b4a1f86a9780c6896fff8a7ae/workers/services/view/rapid-moon-a6a3/production` ➔ `Deployments` / `New deployment` ➔ `c:\Users\SEMA.GERGER\Documents\GitHub\oy\client\dist`
+- **Render Sunucu (`server/`):** `git push` sonrası `https://dashboard.render.com/web/srv-dc3e2467bikc73cu7h2g` ➔ `Manual Deploy` ➔ `Deploy latest commit`
+- **Canlı Site & Sunucu:** `https://game.sitecont.io` • `https://sitecont-game-server.onrender.com/health`
+
