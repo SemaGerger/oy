@@ -7,11 +7,12 @@ import { HUD } from "./ui/HUD";
 import { LoginScreen } from "./ui/LoginScreen";
 import { AuthScreen } from "./ui/AuthScreen";
 import { PortalHome } from "./portal/PortalHome";
+import { GAMES_REGISTRY } from "./portal/gamesRegistry";
 
 export const App: React.FC = () => {
-  const [authChecking, setAuthChecking] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [showAuthScreen, setShowAuthScreen] = useState(false);
 
   const [selectedGameId, setSelectedGameId] = useState<string | null>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -29,6 +30,7 @@ export const App: React.FC = () => {
   const phaserContainerRef = useRef<HTMLDivElement>(null);
   const gameInstanceRef = useRef<Phaser.Game | null>(null);
 
+  // Silently restore saved session in the background without blocking landing page
   useEffect(() => {
     let active = true;
     fetchCurrentUser().then((session) => {
@@ -37,7 +39,6 @@ export const App: React.FC = () => {
         setUser(session.user);
         setToken(session.token);
       }
-      setAuthChecking(false);
     });
     return () => {
       active = false;
@@ -47,6 +48,7 @@ export const App: React.FC = () => {
   const handleAuthenticated = (authUser: AuthUser, authToken: string) => {
     setUser(authUser);
     setToken(authToken);
+    setShowAuthScreen(false);
   };
 
   const handleLogout = () => {
@@ -62,6 +64,12 @@ export const App: React.FC = () => {
     setUser(null);
     setToken(null);
     setSelectedGameId(null);
+    setShowAuthScreen(false);
+  };
+
+  const handleSelectGame = (gameId: string) => {
+    setError(null);
+    setSelectedGameId(gameId);
   };
 
   const handleJoin = async (options: JoinOptions) => {
@@ -79,7 +87,7 @@ export const App: React.FC = () => {
         setError("Oturumunuz geçersiz veya süresi dolmuş. Lütfen tekrar giriş yapın.");
       } else {
         setError(
-          "Sunucuya bağlanılamadı. Lütfen sunucunun (npm run dev) çalıştığından emin olun (port: 2567)."
+          "Sunucuya bağlanılamadı. Sunucu uyanıyor olabilir, birkaç saniye sonra tekrar deneyin."
         );
       }
     } finally {
@@ -98,6 +106,7 @@ export const App: React.FC = () => {
     }
     setError(null);
     setSelectedGameId(null);
+    setShowAuthScreen(false);
   };
 
   useEffect(() => {
@@ -122,37 +131,36 @@ export const App: React.FC = () => {
     };
   }, [room]);
 
-  if (authChecking) {
+  // Explicit Auth Screen opened from Navbar
+  if (showAuthScreen && (!user || !token)) {
     return (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "#090d16",
-          color: "#94a3b8",
-          fontSize: "14px",
-        }}
-      >
-        Oturum kontrol ediliyor...
-      </div>
+      <AuthScreen
+        onAuthenticated={handleAuthenticated}
+        onBackToPortal={() => setShowAuthScreen(false)}
+      />
     );
   }
 
-  // 1. Mandatory Secure Login / Register Screen
-  if (!user || !token) {
-    return <AuthScreen onAuthenticated={handleAuthenticated} />;
-  }
-
-  // 2. Poki-style Game Portal Home Screen (only Game #1)
+  // 1. Landing Page: Always show games first!
   if (!selectedGameId) {
     return (
       <PortalHome
         user={user}
-        onSelectGame={(id) => setSelectedGameId(id)}
+        onSelectGame={handleSelectGame}
+        onOpenAuth={() => setShowAuthScreen(true)}
         onLogout={handleLogout}
+      />
+    );
+  }
+
+  // 2. Check if selected game requires authentication (Multiplayer games)
+  const selectedGame = GAMES_REGISTRY.find((g) => g.id === selectedGameId);
+  if (selectedGame?.requiresAuth && (!user || !token)) {
+    return (
+      <AuthScreen
+        onAuthenticated={handleAuthenticated}
+        onBackToPortal={handleBackToPortal}
+        reasonText={`${selectedGame.title} çok oyunculu bir oyundur. Oynamak için giriş yapın.`}
       />
     );
   }
@@ -162,8 +170,8 @@ export const App: React.FC = () => {
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
       {!room ? (
         <LoginScreen
-          user={user}
-          token={token}
+          user={user!}
+          token={token!}
           onJoin={handleJoin}
           isLoading={isLoading}
           error={error}

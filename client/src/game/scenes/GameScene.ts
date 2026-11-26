@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { Room } from "colyseus.js";
 import { EventBus } from "../EventBus";
+import { AppTheme, getSavedTheme } from "../../theme/ThemeContext";
 
 interface PlayerVisual {
   container: Phaser.GameObjects.Container;
@@ -43,6 +44,12 @@ export class GameScene extends Phaser.Scene {
   private bulletVisuals: Map<string, BulletVisual> = new Map();
   private coinVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
   private obstacleVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
+  private obstacleData: Map<string, { type: string; x: number; y: number; radius: number }> = new Map();
+
+  private bgGraphics: Phaser.GameObjects.Graphics | null = null;
+  private currentTheme: AppTheme = getSavedTheme();
+  private mapW = 2200;
+  private mapH = 2200;
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasdKeys!: {
@@ -75,6 +82,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private handleThemeChanged = (nextTheme: AppTheme) => {
+    this.currentTheme = nextTheme;
+    this.drawBackground(this.mapW, this.mapH);
+    this.rebuildObstacleVisuals();
+  };
+
   create() {
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
@@ -104,69 +117,125 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    const mapW = this.room?.state?.mapWidth || 2200;
-    const mapH = this.room?.state?.mapHeight || 2200;
+    this.mapW = this.room?.state?.mapWidth || 2200;
+    this.mapH = this.room?.state?.mapHeight || 2200;
 
-    this.drawBackground(mapW, mapH);
-    this.cameras.main.centerOn(mapW / 2, mapH / 2);
+    this.drawBackground(this.mapW, this.mapH);
+    this.cameras.main.centerOn(this.mapW / 2, this.mapH / 2);
+
+    EventBus.on("theme-changed", this.handleThemeChanged);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      EventBus.off("theme-changed", this.handleThemeChanged);
+    });
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => {
+      EventBus.off("theme-changed", this.handleThemeChanged);
+    });
 
     this.setupRoomListeners();
 
     EventBus.emit("current-scene-ready", this);
   }
 
+  private rebuildObstacleVisuals() {
+    this.obstacleVisuals.forEach((v) => v.destroy());
+    this.obstacleVisuals.clear();
+    this.obstacleData.forEach((obs, id) => {
+      const visual = this.createObstacleVisual(obs);
+      this.obstacleVisuals.set(id, visual);
+    });
+  }
+
   private drawBackground(mapW: number, mapH: number) {
+    if (this.bgGraphics) {
+      this.bgGraphics.destroy();
+    }
     const bg = this.add.graphics();
     bg.setDepth(0);
+    this.bgGraphics = bg;
 
-    // Subtle dark tactical arena floor base
-    bg.fillStyle(0x0b1120, 1);
-    bg.fillRect(0, 0, mapW, mapH);
+    const isOffice = this.currentTheme === "office";
 
-    // Subtle checkerboard sector tiles for depth
-    bg.fillStyle(0x0f172a, 0.45);
-    const tileSize = 192;
-    for (let x = 0; x < mapW; x += tileSize) {
-      for (let y = 0; y < mapH; y += tileSize) {
-        if (((x / tileSize) + (y / tileSize)) % 2 === 0) {
-          bg.fillRect(x, y, tileSize, tileSize);
+    if (isOffice) {
+      // Light Stealth Office Mode (Clean Excel / Technical CAD Worksheet Grid)
+      this.cameras.main.setBackgroundColor("#f1f5f9");
+      bg.fillStyle(0xf8fafc, 1);
+      bg.fillRect(0, 0, mapW, mapH);
+
+      // Subtle spreadsheet column/row tint
+      bg.fillStyle(0xf1f5f9, 0.55);
+      const tileSize = 192;
+      for (let x = 0; x < mapW; x += tileSize) {
+        for (let y = 0; y < mapH; y += tileSize) {
+          if (((x / tileSize) + (y / tileSize)) % 2 === 0) {
+            bg.fillRect(x, y, tileSize, tileSize);
+          }
         }
       }
+
+      // Crisp spreadsheet grid lines
+      bg.lineStyle(1, 0xe2e8f0, 1);
+      const gridSize = 48;
+      for (let x = 0; x <= mapW; x += gridSize) {
+        bg.moveTo(x, 0);
+        bg.lineTo(x, mapH);
+      }
+      for (let y = 0; y <= mapH; y += gridSize) {
+        bg.moveTo(0, y);
+        bg.lineTo(mapW, y);
+      }
+      bg.strokePath();
+
+      // Subtle diagram center ring
+      const cx = mapW / 2;
+      const cy = mapH / 2;
+      bg.lineStyle(1.5, 0xcbd5e1, 0.9);
+      bg.strokeCircle(cx, cy, 240);
+
+      // Clean corporate frame border
+      bg.lineStyle(3, 0x94a3b8, 1);
+      bg.strokeRect(0, 0, mapW, mapH);
+    } else {
+      // Dark Fun Mode (Warm handcrafted forest-stone courtyard)
+      this.cameras.main.setBackgroundColor("#232d28");
+      bg.fillStyle(0x2a3630, 1);
+      bg.fillRect(0, 0, mapW, mapH);
+
+      bg.fillStyle(0x313f38, 0.75);
+      const tileSize = 192;
+      for (let x = 0; x < mapW; x += tileSize) {
+        for (let y = 0; y < mapH; y += tileSize) {
+          if (((x / tileSize) + (y / tileSize)) % 2 === 0) {
+            bg.fillRect(x, y, tileSize, tileSize);
+          }
+        }
+      }
+
+      bg.lineStyle(1, 0x3b4a42, 0.55);
+      const gridSize = 64;
+      for (let x = 0; x <= mapW; x += gridSize) {
+        bg.moveTo(x, 0);
+        bg.lineTo(x, mapH);
+      }
+      for (let y = 0; y <= mapH; y += gridSize) {
+        bg.moveTo(0, y);
+        bg.lineTo(mapW, y);
+      }
+      bg.strokePath();
+
+      const cx = mapW / 2;
+      const cy = mapH / 2;
+      bg.fillStyle(0xd6d3d1, 0.05);
+      bg.fillCircle(cx, cy, 240);
+      bg.lineStyle(3, 0xfbbf24, 0.35);
+      bg.strokeCircle(cx, cy, 240);
+      bg.lineStyle(1.5, 0xe7e5e4, 0.16);
+      bg.strokeCircle(cx, cy, 420);
+
+      bg.lineStyle(12, 0xb91c1c, 0.25);
+      bg.strokeRect(6, 6, mapW - 12, mapH - 12);
+      bg.lineStyle(5, 0xf05232, 0.95);
+      bg.strokeRect(0, 0, mapW, mapH);
     }
-
-    // Crisp tactical grid lines
-    bg.lineStyle(1, 0x1e293b, 0.7);
-    const gridSize = 64;
-    for (let x = 0; x <= mapW; x += gridSize) {
-      bg.moveTo(x, 0);
-      bg.lineTo(x, mapH);
-    }
-    for (let y = 0; y <= mapH; y += gridSize) {
-      bg.moveTo(0, y);
-      bg.lineTo(mapW, y);
-    }
-    bg.strokePath();
-
-    // Arena center tactical rings
-    const cx = mapW / 2;
-    const cy = mapH / 2;
-    bg.fillStyle(0x0ea5e9, 0.04);
-    bg.fillCircle(cx, cy, 240);
-    bg.lineStyle(2, 0x38bdf8, 0.35);
-    bg.strokeCircle(cx, cy, 240);
-    bg.lineStyle(1.5, 0x38bdf8, 0.2);
-    bg.strokeCircle(cx, cy, 420);
-
-    // Crosshair sector lines through center
-    bg.lineStyle(1, 0x38bdf8, 0.14);
-    bg.lineBetween(cx, 0, cx, mapH);
-    bg.lineBetween(0, cy, mapW, cy);
-
-    // Outer danger zone boundary glow
-    bg.lineStyle(12, 0xef4444, 0.18);
-    bg.strokeRect(6, 6, mapW - 12, mapH - 12);
-    bg.lineStyle(4, 0xef4444, 0.95);
-    bg.strokeRect(0, 0, mapW, mapH);
 
     this.cameras.main.setBounds(0, 0, mapW, mapH);
   }
@@ -312,11 +381,19 @@ export class GameScene extends Phaser.Scene {
     if (this.room.state.obstacles && typeof this.room.state.obstacles.onAdd === "function") {
       this.room.state.obstacles.onAdd((obs: any, id: string) => {
         if (this.obstacleVisuals.has(id)) return;
-        const visual = this.createObstacleVisual(obs);
+        const data = {
+          type: String(obs.type || "rock"),
+          x: Number(obs.x || 0),
+          y: Number(obs.y || 0),
+          radius: Number(obs.radius || 42),
+        };
+        this.obstacleData.set(id, data);
+        const visual = this.createObstacleVisual(data);
         this.obstacleVisuals.set(id, visual);
       });
 
       this.room.state.obstacles.onRemove((_obs: any, id: string) => {
+        this.obstacleData.delete(id);
         const visual = this.obstacleVisuals.get(id);
         if (visual) {
           visual.destroy();
@@ -326,66 +403,97 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private createObstacleVisual(obs: any): Phaser.GameObjects.Container {
+  private createObstacleVisual(obs: {
+    type: string;
+    x: number;
+    y: number;
+    radius: number;
+  }): Phaser.GameObjects.Container {
     const container = this.add.container(obs.x, obs.y);
     container.setDepth(12);
 
     const r = obs.radius || 42;
+    const isOffice = this.currentTheme === "office";
 
-    // Ground drop shadow for 3D depth
+    if (isOffice) {
+      // Stealth Light Office Mode: Clean CAD / Flowchart Diagram Nodes
+      const shadow = this.add.circle(3, 4, r + 1, 0x94a3b8, 0.2);
+      container.add(shadow);
+
+      if (obs.type === "wall") {
+        const size = r * 1.65;
+        const box = this.add.rectangle(0, 0, size, size, 0xe2e8f0, 1);
+        box.setStrokeStyle(2, 0x94a3b8, 1);
+        const inner = this.add.rectangle(0, 0, size * 0.66, size * 0.66, 0xf8fafc, 1);
+        inner.setStrokeStyle(1, 0xcbd5e1, 1);
+        container.add([box, inner]);
+      } else if (obs.type === "pillar") {
+        const ring = this.add.circle(0, 0, r, 0xeff6ff, 1);
+        ring.setStrokeStyle(2, 0x93c5fd, 1);
+        const core = this.add.circle(0, 0, r * 0.4, 0x3b82f6, 0.25);
+        container.add([ring, core]);
+      } else {
+        const node = this.add.circle(0, 0, r, 0xf1f5f9, 1);
+        node.setStrokeStyle(2, 0x94a3b8, 1);
+        const inner = this.add.circle(0, 0, r * 0.55, 0xe2e8f0, 0.9);
+        container.add([node, inner]);
+      }
+      return container;
+    }
+
+    // Dark Fun Mode: Ground drop shadow for 3D depth
     const shadow = this.add.circle(6, 8, r + 3, 0x000000, 0.45);
     container.add(shadow);
 
     if (obs.type === "pillar") {
-      // Glowing Cyber Energy Pillar
-      const outerAura = this.add.circle(0, 0, r + 6, 0x38bdf8, 0.14);
-      const base = this.add.circle(0, 0, r, 0x1e293b, 1);
-      base.setStrokeStyle(3, 0x38bdf8, 0.9);
+      // Warm Stone Lantern / Brazier Pillar
+      const outerAura = this.add.circle(0, 0, r + 6, 0xf59e0b, 0.14);
+      const base = this.add.circle(0, 0, r, 0x44403c, 1);
+      base.setStrokeStyle(3, 0x292524, 1);
 
-      const midRing = this.add.circle(0, 0, r * 0.65, 0x0f172a, 1);
-      midRing.setStrokeStyle(2, 0x818cf8, 0.8);
+      const midRing = this.add.circle(0, 0, r * 0.65, 0x57534e, 1);
+      midRing.setStrokeStyle(2, 0xd97706, 0.85);
 
-      const core = this.add.circle(0, 0, r * 0.34, 0x38bdf8, 0.95);
-      const innerSpark = this.add.circle(0, 0, r * 0.16, 0xffffff, 1);
+      const core = this.add.circle(0, 0, r * 0.34, 0xf59e0b, 0.95);
+      const innerSpark = this.add.circle(0, 0, r * 0.16, 0xfef3c7, 1);
 
       container.add([outerAura, base, midRing, core, innerSpark]);
 
       this.tweens.add({
         targets: [outerAura, core],
-        scale: 1.12,
-        alpha: 0.65,
+        scale: 1.1,
+        alpha: 0.72,
         yoyo: true,
         repeat: -1,
-        duration: 1300,
+        duration: 1200,
         ease: "Sine.easeInOut",
       });
     } else if (obs.type === "wall") {
-      // Armored Tactical Bunker Block
+      // Concrete & Steel Bunker Cover Block
       const size = r * 1.65;
-      const plate = this.add.rectangle(0, 0, size, size, 0x334155, 1);
-      plate.setStrokeStyle(3, 0x64748b, 1);
+      const plate = this.add.rectangle(0, 0, size, size, 0x57534e, 1);
+      plate.setStrokeStyle(3, 0x292524, 1);
 
-      const innerPlate = this.add.rectangle(0, 0, size * 0.68, size * 0.68, 0x1e293b, 1);
-      innerPlate.setStrokeStyle(2, 0xf59e0b, 0.75);
+      const innerPlate = this.add.rectangle(0, 0, size * 0.68, size * 0.68, 0x78716c, 1);
+      innerPlate.setStrokeStyle(2, 0x44403c, 1);
 
-      const centerDot = this.add.rectangle(0, 0, size * 0.22, size * 0.22, 0xf59e0b, 0.85);
+      const centerDot = this.add.rectangle(0, 0, size * 0.22, size * 0.22, 0xd97706, 0.9);
 
-      // Corner rivets
       const offset = size * 0.38;
-      const r1 = this.add.circle(-offset, -offset, 3, 0x94a3b8);
-      const r2 = this.add.circle(offset, -offset, 3, 0x94a3b8);
-      const r3 = this.add.circle(-offset, offset, 3, 0x94a3b8);
-      const r4 = this.add.circle(offset, offset, 3, 0x94a3b8);
+      const r1 = this.add.circle(-offset, -offset, 3, 0xd6d3d1);
+      const r2 = this.add.circle(offset, -offset, 3, 0xd6d3d1);
+      const r3 = this.add.circle(-offset, offset, 3, 0xd6d3d1);
+      const r4 = this.add.circle(offset, offset, 3, 0xd6d3d1);
 
       container.add([plate, innerPlate, centerDot, r1, r2, r3, r4]);
     } else {
-      // Chiseled 2D Top-Down Boulder / Rock
-      const rockBase = this.add.circle(0, 0, r, 0x475569, 1);
-      rockBase.setStrokeStyle(3, 0x1e293b, 1);
+      // Warm Earthy Boulder / Rock with Moss
+      const rockBase = this.add.circle(0, 0, r, 0x6b6660, 1);
+      rockBase.setStrokeStyle(3, 0x292524, 1);
 
-      const facet1 = this.add.circle(-r * 0.18, -r * 0.16, r * 0.66, 0x64748b, 0.9);
-      const facet2 = this.add.circle(-r * 0.26, -r * 0.24, r * 0.34, 0x94a3b8, 0.65);
-      const mossAccent = this.add.circle(r * 0.28, r * 0.24, r * 0.22, 0x15803d, 0.55);
+      const facet1 = this.add.circle(-r * 0.18, -r * 0.16, r * 0.66, 0x87817a, 0.92);
+      const facet2 = this.add.circle(-r * 0.26, -r * 0.24, r * 0.34, 0xa8a29e, 0.7);
+      const mossAccent = this.add.circle(r * 0.28, r * 0.24, r * 0.24, 0x3f6212, 0.75);
 
       container.add([rockBase, facet1, facet2, mossAccent]);
     }

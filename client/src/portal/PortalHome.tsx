@@ -4,98 +4,363 @@ import {
   Play,
   Swords,
   Users,
-  Sparkles,
   LogOut,
   UserCheck,
+  Shield,
+  Link2,
+  LogIn,
+  Briefcase,
+  Moon,
+  Sun,
+  LayoutGrid,
 } from "lucide-react";
 import { GAMES_REGISTRY } from "./gamesRegistry";
 import { AuthUser } from "../network/authClient";
+import { useTheme } from "../theme/ThemeContext";
 
 interface PortalHomeProps {
-  user: AuthUser;
+  user: AuthUser | null;
   onSelectGame: (gameId: string) => void;
+  onOpenAuth: () => void;
   onLogout: () => void;
 }
 
-export const PortalHome: React.FC<PortalHomeProps> = ({ user, onSelectGame, onLogout }) => {
+export const PortalHome: React.FC<PortalHomeProps> = ({
+  user,
+  onSelectGame,
+  onOpenAuth,
+  onLogout,
+}) => {
+  const { isOffice, setTheme } = useTheme();
   const firstGame = GAMES_REGISTRY[0];
 
   return (
-    <div style={styles.page}>
-      {/* Top Poki-style Navigation Bar */}
-      <header style={styles.navbar}>
+    <div
+      style={{
+        ...styles.page,
+        backgroundColor: isOffice ? "#f8fafc" : "#16171a",
+        backgroundImage: isOffice
+          ? "linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px)"
+          : "radial-gradient(#27272a 1.2px, transparent 1.2px)",
+        backgroundSize: isOffice ? "32px 32px" : "24px 24px",
+        color: isOffice ? "#0f172a" : "#fafaf9",
+      }}
+    >
+      {/* Top Navigation Bar */}
+      <header
+        style={{
+          ...styles.navbar,
+          backgroundColor: isOffice ? "#ffffff" : "#1e1f24",
+          borderBottom: isOffice ? "1px solid #e2e8f0" : "1px solid #2e3038",
+        }}
+      >
         <div style={styles.brand}>
-          <div style={styles.brandIcon}>
-            <Gamepad2 size={26} color="#ffffff" />
+          <div
+            style={{
+              ...styles.brandIcon,
+              backgroundColor: isOffice ? "#2563eb" : "#f05232",
+              borderBottom: isOffice ? "2px solid #1d4ed8" : "3px solid #c93b1e",
+            }}
+          >
+            {isOffice ? (
+              <LayoutGrid size={21} color="#ffffff" strokeWidth={2.2} />
+            ) : (
+              <Gamepad2 size={24} color="#ffffff" strokeWidth={2.4} />
+            )}
           </div>
-          <div>
-            <span style={styles.brandTitle}>SITECONT</span>
-            <span style={styles.brandAccent}>GAME</span>
+          <div style={styles.brandTextRow}>
+            <span
+              style={{
+                ...styles.brandTitle,
+                color: isOffice ? "#0f172a" : "#ffffff",
+              }}
+            >
+              {isOffice ? "Sitecont" : "SITECONT"}
+            </span>
+            <span
+              style={{
+                ...styles.brandAccent,
+                backgroundColor: isOffice ? "#eff6ff" : "#f05232",
+                color: isOffice ? "#1d4ed8" : "#ffffff",
+                border: isOffice ? "1px solid #bfdbfe" : "none",
+              }}
+            >
+              {isOffice ? "Workspace" : "GAME"}
+            </span>
           </div>
         </div>
 
-        {/* Right: Logged-in User Profile & Logout */}
-        <div style={styles.userSection}>
-          <div style={styles.userBadge}>
-            <UserCheck size={16} color="#22c55e" />
-            <span style={{ fontWeight: 700, color: "#ffffff" }}>{user.username}</span>
+        {/* Center/Right: Office (Light) vs Fun (Dark) Switcher + User */}
+        <div style={styles.rightControls}>
+          <div
+            style={{
+              ...styles.themeSwitch,
+              backgroundColor: isOffice ? "#f1f5f9" : "#131417",
+              border: isOffice ? "1px solid #cbd5e1" : "1px solid #2e3038",
+            }}
+            title="Kısayol: Shift + O ile anında Ofis / Eğlence modu değiştir"
+          >
+            <button
+              type="button"
+              onClick={() => setTheme("fun")}
+              style={{
+                ...styles.themeBtn,
+                backgroundColor: !isOffice ? "#f05232" : "transparent",
+                color: !isOffice ? "#ffffff" : "#64748b",
+              }}
+            >
+              <Moon size={13} /> Eğlence
+            </button>
+            <button
+              type="button"
+              onClick={() => setTheme("office")}
+              style={{
+                ...styles.themeBtn,
+                backgroundColor: isOffice ? "#ffffff" : "transparent",
+                color: isOffice ? "#0f172a" : "#9ca3af",
+                boxShadow: isOffice ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+              }}
+            >
+              <Sun size={13} /> Ofis Modu
+            </button>
           </div>
-          <button onClick={onLogout} style={styles.logoutBtn} title="Hesaptan çıkış yap">
-            <LogOut size={15} /> Çıkış Yap
-          </button>
+
+          <div style={styles.userSection}>
+            {user ? (
+              <>
+                <div
+                  style={{
+                    ...styles.userBadge,
+                    backgroundColor: isOffice ? "#f8fafc" : "#27282e",
+                    border: isOffice ? "1px solid #e2e8f0" : "1px solid #3f3f46",
+                  }}
+                >
+                  <UserCheck size={15} color="#16a34a" />
+                  <span style={{ fontWeight: 700, color: isOffice ? "#0f172a" : "#fafaf9" }}>
+                    {user.username}
+                  </span>
+                </div>
+                <button
+                  onClick={onLogout}
+                  style={{
+                    ...styles.logoutBtn,
+                    backgroundColor: isOffice ? "#ffffff" : "#27282e",
+                    border: isOffice ? "1px solid #e2e8f0" : "1px solid #3f3f46",
+                    color: isOffice ? "#475569" : "#d4d4d8",
+                  }}
+                  title="Hesaptan çıkış yap"
+                >
+                  <LogOut size={14} /> Çıkış
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={onOpenAuth}
+                style={{
+                  ...styles.loginNavBtn,
+                  backgroundColor: isOffice ? "#2563eb" : "#f05232",
+                  borderBottom: isOffice ? "2px solid #1d4ed8" : "3px solid #c93b1e",
+                }}
+              >
+                <LogIn size={15} /> Giriş Yap / Kayıt Ol
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main style={styles.mainContent}>
-        {/* Featured Hero Card (Game #1) */}
-        <section style={styles.heroCard}>
+        {/* Stealth Office Mode Tip Banner */}
+        {isOffice && (
+          <div style={styles.officeTipBar}>
+            <Briefcase size={15} color="#2563eb" />
+            <span>
+              <b>Ofis Modu Aktif (Light):</b> Ekranınız kurumsal çalışma alanı görünümündedir.
+              Oyun içinde de <b>Shift + O</b> tuşuyla anında Ofis / Eğlence modu arasında geçiş yapabilirsiniz.
+            </span>
+          </div>
+        )}
+
+        {/* Featured Hero Section */}
+        <section
+          style={{
+            ...styles.heroCard,
+            backgroundColor: isOffice ? "#ffffff" : "#24302a",
+            border: isOffice ? "1px solid #cbd5e1" : "2px solid #1b2420",
+            borderBottom: isOffice ? "2px solid #cbd5e1" : "5px solid #151c18",
+            color: isOffice ? "#0f172a" : "#ffffff",
+            boxShadow: isOffice
+              ? "0 4px 14px rgba(15, 23, 42, 0.05)"
+              : "0 16px 34px rgba(0, 0, 0, 0.35)",
+          }}
+        >
           <div style={styles.heroLeft}>
-            <div style={styles.heroBadge}>
-              <Sparkles size={14} /> 1. OYUN • CANLI MULTIPLAYER
+            <div
+              style={{
+                ...styles.heroBadge,
+                backgroundColor: isOffice ? "#eff6ff" : "#fbbf24",
+                color: isOffice ? "#1d4ed8" : "#18181b",
+                border: isOffice ? "1px solid #bfdbfe" : "none",
+              }}
+            >
+              {isOffice ? "AKTİF MODÜL • ÇOK KULLANICILI" : "1. OYUN • ÇOK OYUNCULU"}
             </div>
-            <h1 style={styles.heroTitle}>{firstGame.title}</h1>
-            <p style={styles.heroDesc}>
-              Kayaların, siper duvarlarının ve enerji sütunlarının arkasına saklanarak üzerine gelen
-              düşman dalgalarını yok et! Arkadaşlarınla Co-op takım ol veya PvP modunda birbirinizi
-              avlayın.
+            <h1
+              style={{
+                ...styles.heroTitle,
+                color: isOffice ? "#0f172a" : "#ffffff",
+              }}
+            >
+              {isOffice ? "Kaynak & Akış Simülasyonu (Arena 2D)" : firstGame.title}
+            </h1>
+            <p
+              style={{
+                ...styles.heroDesc,
+                color: isOffice ? "#475569" : "#d6d3d1",
+              }}
+            >
+              {isOffice
+                ? "Ekip arkadaşlarınızla ortak odada gerçek zamanlı 2D koordinasyon ve strateji simülasyonunu başlatın. Ekranınız sade teknik diyagram görünümünde açılır."
+                : "Kayaların ve siper duvarlarının arkasına saklanarak üzerine gelen düşman dalgalarını durdur. Arkadaşlarınla birlikte oyna ya da PvP modunu açıp birbirinizle yarışın."}
             </p>
             <div style={styles.heroMetaRow}>
-              <span style={styles.metaChip}>
-                <Users size={14} color="#38bdf8" /> {firstGame.playersText}
+              <span
+                style={{
+                  ...styles.metaChip,
+                  backgroundColor: isOffice ? "#f8fafc" : "rgba(255, 255, 255, 0.08)",
+                  border: isOffice ? "1px solid #e2e8f0" : "1px solid rgba(255, 255, 255, 0.12)",
+                  color: isOffice ? "#334155" : "#f5f5f4",
+                }}
+              >
+                <Users size={14} color={isOffice ? "#2563eb" : "#fbbf24"} /> {firstGame.playersText}
               </span>
-              <span style={styles.metaChip}>🪨 Engeller & Siper</span>
-              <span style={styles.metaChip}>🛡️ Co-op & ⚔️ PvP</span>
-              <span style={styles.metaChip}>🔗 Davet Koduyla Arkadaş Çağır</span>
+              <span
+                style={{
+                  ...styles.metaChip,
+                  backgroundColor: isOffice ? "#f8fafc" : "rgba(255, 255, 255, 0.08)",
+                  border: isOffice ? "1px solid #e2e8f0" : "1px solid rgba(255, 255, 255, 0.12)",
+                  color: isOffice ? "#334155" : "#f5f5f4",
+                }}
+              >
+                <Shield size={14} color={isOffice ? "#16a34a" : "#4ade80"} /> Co-op ve PvP
+              </span>
+              <span
+                style={{
+                  ...styles.metaChip,
+                  backgroundColor: isOffice ? "#f8fafc" : "rgba(255, 255, 255, 0.08)",
+                  border: isOffice ? "1px solid #e2e8f0" : "1px solid rgba(255, 255, 255, 0.12)",
+                  color: isOffice ? "#334155" : "#f5f5f4",
+                }}
+              >
+                <Link2 size={14} color={isOffice ? "#64748b" : "#f59e0b"} /> Oda Koduyla Davet
+              </span>
             </div>
-            <button onClick={() => onSelectGame(firstGame.id)} style={styles.heroPlayBtn}>
-              <Play size={20} fill="#0f172a" /> HEMEN OYNA
+            <button
+              onClick={() => onSelectGame(firstGame.id)}
+              style={{
+                ...styles.heroPlayBtn,
+                backgroundColor: isOffice ? "#2563eb" : "#f05232",
+                borderBottom: isOffice ? "3px solid #1d4ed8" : "4px solid #c93b1e",
+              }}
+            >
+              <Play size={18} fill="#ffffff" /> {isOffice ? "Çalışma Alanını Aç" : "HEMEN OYNA"}
             </button>
           </div>
 
-          {/* Visual Arena Preview */}
+          {/* Preview Box (Adapts to Office Diagram vs Dark Courtyard Arena) */}
           <div
-            style={styles.heroPreview}
+            style={{
+              ...styles.heroPreview,
+              backgroundColor: isOffice ? "#f8fafc" : "#2f3d36",
+              border: isOffice ? "1px solid #cbd5e1" : "3px solid #3f5047",
+            }}
             onClick={() => onSelectGame(firstGame.id)}
-            title="Oyunu başlatmak için tıkla"
+            title="Başlatmak için tıkla"
           >
-            <div style={styles.previewArenaCircle}>
-              <div style={styles.previewPlayer} />
-              <div style={styles.previewObstacle1} />
-              <div style={styles.previewObstacle2} />
-              <div style={styles.previewEnemy1} />
-              <div style={styles.previewEnemy2} />
-              <div style={styles.previewCoin1} />
+            <div
+              style={{
+                ...styles.previewArenaRing,
+                border: isOffice
+                  ? "1.5px dashed #94a3b8"
+                  : "2px dashed rgba(251, 191, 36, 0.35)",
+              }}
+            >
+              <div
+                style={{
+                  ...styles.previewObstacle1,
+                  backgroundColor: isOffice ? "#cbd5e1" : "#78716c",
+                  border: isOffice ? "1.5px solid #94a3b8" : "2px solid #a8a29e",
+                }}
+              />
+              <div
+                style={{
+                  ...styles.previewObstacle2,
+                  backgroundColor: isOffice ? "#e2e8f0" : "#57534e",
+                  border: isOffice ? "1.5px solid #64748b" : "2px solid #fbbf24",
+                }}
+              />
+              <div
+                style={{
+                  ...styles.previewPlayer,
+                  backgroundColor: isOffice ? "#2563eb" : "#3b82f6",
+                  border: isOffice ? "2px solid #ffffff" : "3px solid #ffffff",
+                }}
+              />
+              <div
+                style={{
+                  ...styles.previewEnemy1,
+                  backgroundColor: isOffice ? "#94a3b8" : "#dc2626",
+                  border: isOffice ? "1.5px solid #64748b" : "2px solid #7f1d1d",
+                }}
+              />
+              <div
+                style={{
+                  ...styles.previewEnemy2,
+                  backgroundColor: isOffice ? "#cbd5e1" : "#ea580c",
+                  border: isOffice ? "1.5px solid #64748b" : "2px solid #7c2d12",
+                }}
+              />
+              <div
+                style={{
+                  ...styles.previewCoin1,
+                  backgroundColor: isOffice ? "#10b981" : "#fbbf24",
+                }}
+              />
             </div>
-            <div style={styles.previewOverlayText}>▶ Tıkla ve Savaşa Gir</div>
+            <div
+              style={{
+                ...styles.previewOverlayText,
+                backgroundColor: isOffice ? "#ffffff" : "#18181b",
+                color: isOffice ? "#334155" : "#ffffff",
+                border: isOffice ? "1px solid #e2e8f0" : "none",
+              }}
+            >
+              {isOffice ? "Diyagramı Başlat" : "Savaşa Katıl"}
+            </div>
           </div>
         </section>
 
-        {/* Active Game Card */}
+        {/* Active Games Section */}
         <section>
           <div style={styles.sectionHeader}>
-            <h2 style={styles.sectionTitle}>🎯 Yayındaki Oyunlar</h2>
-            <span style={styles.gameCount}>1 Oyun Aktif</span>
+            <h2
+              style={{
+                ...styles.sectionTitle,
+                color: isOffice ? "#0f172a" : "#fafaf9",
+              }}
+            >
+              {isOffice ? "Aktif Uygulamalar" : "Yayındaki Oyunlar"}
+            </h2>
+            <span
+              style={{
+                ...styles.gameCount,
+                backgroundColor: isOffice ? "#e2e8f0" : "#27282e",
+                color: isOffice ? "#334155" : "#a1a1aa",
+              }}
+            >
+              {isOffice ? "1 Modül" : "1 Oyun"}
+            </span>
           </div>
 
           <div style={styles.grid}>
@@ -103,27 +368,96 @@ export const PortalHome: React.FC<PortalHomeProps> = ({ user, onSelectGame, onLo
               <div
                 key={game.id}
                 onClick={() => onSelectGame(game.id)}
-                style={styles.card}
+                style={{
+                  ...styles.card,
+                  backgroundColor: isOffice ? "#ffffff" : "#1e1f24",
+                  border: isOffice ? "1px solid #cbd5e1" : "1px solid #2e3038",
+                  borderBottom: isOffice ? "2px solid #cbd5e1" : "4px solid #121317",
+                }}
               >
-                <div style={{ ...styles.cardThumb, background: game.gradient }}>
+                <div
+                  style={{
+                    ...styles.cardThumb,
+                    backgroundColor: isOffice ? "#f1f5f9" : game.gradient,
+                  }}
+                >
                   {game.badge && (
-                    <span style={styles.cardBadge}>{game.badge}</span>
+                    <span
+                      style={{
+                        ...styles.cardBadge,
+                        backgroundColor: isOffice ? "#dbeafe" : "#16a34a",
+                        color: isOffice ? "#1d4ed8" : "#ffffff",
+                      }}
+                    >
+                      {isOffice ? "AKTİF" : game.badge}
+                    </span>
                   )}
-                  <div style={styles.cardIconWrap}>
-                    <Swords size={42} color="#38bdf8" />
+                  <div
+                    style={{
+                      ...styles.cardIconWrap,
+                      backgroundColor: isOffice ? "#ffffff" : "rgba(255, 255, 255, 0.1)",
+                      border: isOffice
+                        ? "1px solid #cbd5e1"
+                        : "2px solid rgba(251, 191, 36, 0.45)",
+                    }}
+                  >
+                    {isOffice ? (
+                      <LayoutGrid size={30} color="#2563eb" />
+                    ) : (
+                      <Swords size={34} color="#fbbf24" strokeWidth={2.2} />
+                    )}
                   </div>
-                  <span style={styles.cardCategoryTag}>{game.category}</span>
+                  <span
+                    style={{
+                      ...styles.cardCategoryTag,
+                      backgroundColor: isOffice ? "#ffffff" : "rgba(24, 24, 27, 0.78)",
+                      color: isOffice ? "#475569" : "#f4f4f5",
+                      border: isOffice ? "1px solid #e2e8f0" : "none",
+                    }}
+                  >
+                    {isOffice ? "Ekip Modülü" : game.category}
+                  </span>
                 </div>
 
                 <div style={styles.cardBody}>
-                  <h3 style={styles.cardTitle}>{game.title}</h3>
-                  <p style={styles.cardSubtitle}>{game.subtitle}</p>
-                  <div style={styles.cardFooter}>
-                    <span style={styles.playersLabel}>
+                  <h3
+                    style={{
+                      ...styles.cardTitle,
+                      color: isOffice ? "#0f172a" : "#ffffff",
+                    }}
+                  >
+                    {isOffice ? "Arena 2D — Akış Simülasyonu" : game.title}
+                  </h3>
+                  <p
+                    style={{
+                      ...styles.cardSubtitle,
+                      color: isOffice ? "#475569" : "#a1a1aa",
+                    }}
+                  >
+                    {game.subtitle}
+                  </p>
+                  <div
+                    style={{
+                      ...styles.cardFooter,
+                      borderTop: isOffice ? "1px solid #f1f5f9" : "1px solid #2e3038",
+                    }}
+                  >
+                    <span
+                      style={{
+                        ...styles.playersLabel,
+                        color: isOffice ? "#64748b" : "#9ca3af",
+                      }}
+                    >
                       <Users size={13} /> {game.playersText}
                     </span>
-                    <span style={styles.playPill}>
-                      <Play size={13} fill="#ffffff" /> Oyna
+                    <span
+                      style={{
+                        ...styles.playPill,
+                        backgroundColor: isOffice ? "#2563eb" : "#f05232",
+                        borderBottom: isOffice ? "2px solid #1d4ed8" : "2px solid #c93b1e",
+                      }}
+                    >
+                      <Play size={12} fill="#ffffff" /> {isOffice ? "Aç" : "Oyna"}
                     </span>
                   </div>
                 </div>
@@ -142,19 +476,15 @@ const styles: Record<string, React.CSSProperties> = {
     height: "100%",
     display: "flex",
     flexDirection: "column",
-    backgroundColor: "#090d16",
-    color: "#ffffff",
     overflow: "hidden",
   },
   navbar: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "14px 28px",
-    backgroundColor: "rgba(15, 23, 42, 0.92)",
-    backdropFilter: "blur(12px)",
-    borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+    padding: "13px 26px",
     gap: "16px",
+    flexWrap: "wrap",
   },
   brand: {
     display: "flex",
@@ -162,48 +492,84 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "10px",
   },
   brandIcon: {
-    width: "42px",
-    height: "42px",
-    borderRadius: "12px",
-    background: "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)",
+    width: "40px",
+    height: "40px",
+    borderRadius: "11px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0 4px 14px rgba(56, 189, 248, 0.35)",
+  },
+  brandTextRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
   },
   brandTitle: {
-    fontSize: "22px",
-    fontWeight: 900,
-    letterSpacing: "1px",
-    color: "#ffffff",
+    fontSize: "20px",
+    fontWeight: 800,
+    letterSpacing: "-0.3px",
   },
   brandAccent: {
-    fontSize: "22px",
-    fontWeight: 900,
-    letterSpacing: "1px",
-    color: "#38bdf8",
-    marginLeft: "2px",
+    fontSize: "12px",
+    fontWeight: 800,
+    letterSpacing: "0.4px",
+    padding: "3px 8px",
+    borderRadius: "6px",
+  },
+  rightControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    flexWrap: "wrap",
+  },
+  themeSwitch: {
+    display: "flex",
+    alignItems: "center",
+    padding: "3px",
+    borderRadius: "10px",
+    gap: "2px",
+  },
+  themeBtn: {
+    border: "none",
+    borderRadius: "7px",
+    padding: "6px 11px",
+    fontSize: "12px",
+    fontWeight: 700,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: "5px",
+    fontFamily: "inherit",
+    transition: "all 0.15s ease",
   },
   userSection: {
     display: "flex",
     alignItems: "center",
-    gap: "10px",
+    gap: "8px",
   },
   userBadge: {
-    backgroundColor: "rgba(34, 197, 94, 0.14)",
-    border: "1px solid rgba(34, 197, 94, 0.35)",
-    borderRadius: "20px",
-    padding: "7px 14px",
+    borderRadius: "10px",
+    padding: "7px 13px",
     fontSize: "13px",
     display: "flex",
     alignItems: "center",
-    gap: "8px",
+    gap: "7px",
+  },
+  loginNavBtn: {
+    border: "none",
+    color: "#ffffff",
+    borderRadius: "10px",
+    padding: "8px 15px",
+    fontSize: "13px",
+    fontWeight: 800,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: "7px",
+    fontFamily: "inherit",
   },
   logoutBtn: {
-    backgroundColor: "rgba(239, 68, 68, 0.14)",
-    border: "1px solid rgba(239, 68, 68, 0.35)",
-    color: "#fca5a5",
-    borderRadius: "12px",
+    borderRadius: "10px",
     padding: "7px 12px",
     fontSize: "12px",
     fontWeight: 700,
@@ -211,29 +577,38 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: "6px",
+    fontFamily: "inherit",
   },
   mainContent: {
     flex: 1,
     overflowY: "auto",
-    padding: "28px",
-    maxWidth: "1180px",
+    padding: "26px",
+    maxWidth: "1120px",
     width: "100%",
     margin: "0 auto",
     display: "flex",
     flexDirection: "column",
-    gap: "32px",
+    gap: "24px",
+  },
+  officeTipBar: {
+    backgroundColor: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1e40af",
+    borderRadius: "10px",
+    padding: "10px 14px",
+    fontSize: "12px",
+    display: "flex",
+    alignItems: "center",
+    gap: "9px",
   },
   heroCard: {
-    background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #0284c7 100%)",
-    border: "1px solid rgba(56, 189, 248, 0.35)",
-    borderRadius: "24px",
-    padding: "30px 34px",
+    borderRadius: "20px",
+    padding: "28px 32px",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     gap: "28px",
     flexWrap: "wrap",
-    boxShadow: "0 20px 50px rgba(0, 0, 0, 0.5)",
   },
   heroLeft: {
     flex: "1 1 420px",
@@ -243,68 +618,57 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "flex-start",
   },
   heroBadge: {
-    backgroundColor: "rgba(34, 197, 94, 0.2)",
-    border: "1px solid #22c55e",
-    color: "#4ade80",
     fontSize: "11px",
     fontWeight: 800,
-    padding: "4px 12px",
-    borderRadius: "20px",
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
+    padding: "4px 11px",
+    borderRadius: "7px",
+    letterSpacing: "0.4px",
   },
   heroTitle: {
-    fontSize: "34px",
-    fontWeight: 900,
+    fontSize: "30px",
+    fontWeight: 800,
     margin: 0,
-    color: "#ffffff",
+    letterSpacing: "-0.4px",
   },
   heroDesc: {
     fontSize: "14px",
-    color: "#cbd5e1",
-    lineHeight: 1.55,
+    lineHeight: 1.6,
     margin: 0,
-    maxWidth: "560px",
+    maxWidth: "540px",
   },
   heroMetaRow: {
     display: "flex",
     alignItems: "center",
-    gap: "10px",
+    gap: "8px",
     flexWrap: "wrap",
   },
   metaChip: {
-    backgroundColor: "rgba(15, 23, 42, 0.65)",
-    border: "1px solid rgba(255, 255, 255, 0.12)",
-    padding: "5px 12px",
-    borderRadius: "10px",
+    padding: "6px 12px",
+    borderRadius: "9px",
     fontSize: "12px",
-    color: "#e2e8f0",
+    fontWeight: 600,
     display: "flex",
     alignItems: "center",
     gap: "6px",
   },
   heroPlayBtn: {
-    marginTop: "4px",
-    backgroundColor: "#38bdf8",
-    color: "#0f172a",
+    marginTop: "6px",
+    color: "#ffffff",
     border: "none",
-    borderRadius: "14px",
-    padding: "14px 30px",
+    borderRadius: "12px",
+    padding: "13px 26px",
     fontSize: "15px",
-    fontWeight: 900,
+    fontWeight: 800,
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
-    gap: "10px",
-    boxShadow: "0 8px 25px rgba(56, 189, 248, 0.45)",
+    gap: "9px",
+    fontFamily: "inherit",
   },
   heroPreview: {
-    width: "290px",
-    height: "200px",
-    backgroundColor: "#090d16",
-    borderRadius: "18px",
-    border: "2px solid rgba(56, 189, 248, 0.4)",
+    width: "280px",
+    height: "196px",
+    borderRadius: "16px",
     position: "relative",
     display: "flex",
     alignItems: "center",
@@ -312,59 +676,48 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     overflow: "hidden",
   },
-  previewArenaCircle: {
-    width: "150px",
-    height: "150px",
+  previewArenaRing: {
+    width: "146px",
+    height: "146px",
     borderRadius: "50%",
-    border: "2px dashed #1e293b",
     position: "relative",
   },
   previewPlayer: {
     width: "24px",
     height: "24px",
     borderRadius: "50%",
-    backgroundColor: "#38bdf8",
-    border: "3px solid #ffffff",
     position: "absolute",
     top: "60px",
     left: "60px",
-    boxShadow: "0 0 14px #38bdf8",
   },
   previewObstacle1: {
     width: "26px",
     height: "26px",
-    borderRadius: "8px",
-    backgroundColor: "#475569",
-    border: "2px solid #94a3b8",
+    borderRadius: "7px",
     position: "absolute",
-    top: "26px",
-    left: "24px",
+    top: "24px",
+    left: "22px",
   },
   previewObstacle2: {
     width: "28px",
     height: "28px",
     borderRadius: "50%",
-    backgroundColor: "#1e1b4b",
-    border: "2px solid #38bdf8",
     position: "absolute",
-    bottom: "24px",
-    right: "26px",
-    boxShadow: "0 0 10px rgba(56, 189, 248, 0.5)",
+    bottom: "22px",
+    right: "22px",
   },
   previewEnemy1: {
     width: "18px",
     height: "18px",
     borderRadius: "50%",
-    backgroundColor: "#ef4444",
     position: "absolute",
-    top: "14px",
-    right: "28px",
+    top: "16px",
+    right: "26px",
   },
   previewEnemy2: {
     width: "20px",
     height: "20px",
     borderRadius: "50%",
-    backgroundColor: "#a855f7",
     position: "absolute",
     bottom: "18px",
     left: "20px",
@@ -373,40 +726,34 @@ const styles: Record<string, React.CSSProperties> = {
     width: "10px",
     height: "10px",
     borderRadius: "50%",
-    backgroundColor: "#facc15",
+    border: "1.5px solid #ffffff",
     position: "absolute",
     top: "44px",
     right: "18px",
-    boxShadow: "0 0 8px #facc15",
   },
   previewOverlayText: {
     position: "absolute",
     bottom: "10px",
-    backgroundColor: "rgba(15, 23, 42, 0.85)",
     padding: "4px 12px",
-    borderRadius: "12px",
+    borderRadius: "8px",
     fontSize: "11px",
     fontWeight: 700,
-    color: "#38bdf8",
   },
   sectionHeader: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: "16px",
+    marginBottom: "14px",
   },
   sectionTitle: {
-    fontSize: "19px",
+    fontSize: "18px",
     fontWeight: 800,
     margin: 0,
   },
   gameCount: {
     fontSize: "12px",
-    color: "#4ade80",
-    backgroundColor: "rgba(34, 197, 94, 0.14)",
-    border: "1px solid rgba(34, 197, 94, 0.3)",
-    padding: "4px 12px",
-    borderRadius: "12px",
+    padding: "4px 10px",
+    borderRadius: "8px",
     fontWeight: 700,
   },
   grid: {
@@ -415,17 +762,14 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "20px",
   },
   card: {
-    backgroundColor: "#111827",
-    border: "2px solid #38bdf8",
-    borderRadius: "18px",
+    borderRadius: "16px",
     overflow: "hidden",
     cursor: "pointer",
     display: "flex",
     flexDirection: "column",
-    boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35)",
   },
   cardThumb: {
-    height: "150px",
+    height: "144px",
     position: "relative",
     display: "flex",
     alignItems: "center",
@@ -433,39 +777,33 @@ const styles: Record<string, React.CSSProperties> = {
   },
   cardBadge: {
     position: "absolute",
-    top: "10px",
-    left: "10px",
-    backgroundColor: "#22c55e",
-    color: "#052e16",
+    top: "12px",
+    left: "12px",
     fontSize: "10px",
     fontWeight: 800,
-    padding: "3px 9px",
-    borderRadius: "10px",
+    padding: "4px 9px",
+    borderRadius: "7px",
+    letterSpacing: "0.4px",
   },
   cardCategoryTag: {
     position: "absolute",
     bottom: "10px",
     right: "10px",
-    backgroundColor: "rgba(15, 23, 42, 0.75)",
-    color: "#cbd5e1",
-    fontSize: "10px",
+    fontSize: "11px",
     fontWeight: 600,
-    padding: "3px 8px",
-    borderRadius: "8px",
+    padding: "3px 9px",
+    borderRadius: "7px",
   },
   cardIconWrap: {
-    width: "74px",
-    height: "74px",
-    borderRadius: "20px",
-    backgroundColor: "rgba(15, 23, 42, 0.55)",
-    backdropFilter: "blur(6px)",
+    width: "66px",
+    height: "66px",
+    borderRadius: "16px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    border: "1px solid rgba(255, 255, 255, 0.14)",
   },
   cardBody: {
-    padding: "16px",
+    padding: "16px 18px",
     display: "flex",
     flexDirection: "column",
     gap: "8px",
@@ -474,11 +812,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "17px",
     fontWeight: 800,
     margin: 0,
-    color: "#ffffff",
   },
   cardSubtitle: {
-    fontSize: "12px",
-    color: "#94a3b8",
+    fontSize: "13px",
     margin: 0,
     lineHeight: 1.45,
   },
@@ -487,23 +823,21 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: "8px",
-    paddingTop: "10px",
-    borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+    paddingTop: "12px",
   },
   playersLabel: {
-    fontSize: "11px",
-    color: "#94a3b8",
+    fontSize: "12px",
+    fontWeight: 600,
     display: "flex",
     alignItems: "center",
     gap: "5px",
   },
   playPill: {
-    backgroundColor: "#0284c7",
     color: "#ffffff",
     fontSize: "12px",
-    fontWeight: 700,
+    fontWeight: 800,
     padding: "6px 14px",
-    borderRadius: "10px",
+    borderRadius: "9px",
     display: "flex",
     alignItems: "center",
     gap: "5px",

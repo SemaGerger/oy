@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import {
   Gamepad2,
   Play,
-  Sparkles,
   Shield,
   Swords,
   Users,
@@ -64,19 +63,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
         <div style={styles.logoRow}>
           <div style={styles.iconCircle}>
-            <Gamepad2 size={32} color="#38bdf8" />
+            <Gamepad2 size={28} color="#ffffff" strokeWidth={2.4} />
           </div>
           <div>
-            <h1 style={styles.title}>SURVIVAL ARENA 2D</h1>
-            <p style={styles.subtitle}>1. Oyun • Engeller, Düşman Dalgaları & Co-op / PvP</p>
+            <h1 style={styles.title}>Survival Arena 2D</h1>
+            <p style={styles.subtitle}>Oda ayarlarını seç ve oyuna katıl</p>
           </div>
         </div>
 
         {/* Verified Account Badge */}
         <div style={styles.verifiedRow}>
-          <UserCheck size={16} color="#22c55e" />
-          <span style={{ color: "#94a3b8", fontSize: "12px" }}>Giriş Yapılan Hesap:</span>
-          <span style={{ color: "#ffffff", fontWeight: 800, fontSize: "13px" }}>
+          <UserCheck size={16} color="#16a34a" />
+          <span style={{ color: "#52525b", fontSize: "12px", fontWeight: 600 }}>Hesap:</span>
+          <span style={{ color: "#18181b", fontWeight: 800, fontSize: "13px" }}>
             {user.username}
           </span>
         </div>
@@ -84,25 +83,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         <form onSubmit={(e) => handleSubmit(e, false)} style={styles.form}>
           {/* Game Mode Selection */}
           <div>
-            <label style={styles.label}>Oyun Modu Seçin (Oda sahibi oyun içinde değiştirebilir)</label>
+            <label style={styles.label}>Oyun Modu (Oda sahibi oyun içinde değiştirebilir)</label>
             <div style={styles.modeGrid}>
               <div
                 onClick={() => setGameMode("coop")}
                 style={{
                   ...styles.modeCard,
-                  borderColor: gameMode === "coop" ? "#22c55e" : "#334155",
-                  backgroundColor:
-                    gameMode === "coop" ? "rgba(34, 197, 94, 0.14)" : "rgba(15, 23, 42, 0.6)",
+                  borderColor: gameMode === "coop" ? "#16a34a" : "#e4e4e7",
+                  backgroundColor: gameMode === "coop" ? "#f0fdf4" : "#fafafa",
                 }}
               >
                 <div style={styles.modeHeader}>
-                  <Shield size={18} color="#22c55e" />
-                  <span style={{ fontWeight: "bold", color: "#ffffff", fontSize: "13px" }}>
-                    1. Birlikte (Co-op)
+                  <Shield size={17} color="#16a34a" />
+                  <span style={{ fontWeight: 800, color: "#18181b", fontSize: "13px" }}>
+                    Birlikte (Co-op)
                   </span>
                 </div>
                 <p style={styles.modeDesc}>
-                  Arkadaşlarınla takım ol, üzerinize gelen düşmanları beraber öldürün! Dost ateşi kapalı.
+                  Takım ol, düşmanları beraber temizle. Dost ateşi kapalı.
                 </p>
               </div>
 
@@ -110,25 +108,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 onClick={() => setGameMode("pvp")}
                 style={{
                   ...styles.modeCard,
-                  borderColor: gameMode === "pvp" ? "#ef4444" : "#334155",
-                  backgroundColor:
-                    gameMode === "pvp" ? "rgba(239, 68, 68, 0.15)" : "rgba(15, 23, 42, 0.6)",
+                  borderColor: gameMode === "pvp" ? "#dc2626" : "#e4e4e7",
+                  backgroundColor: gameMode === "pvp" ? "#fef2f2" : "#fafafa",
                 }}
               >
                 <div style={styles.modeHeader}>
-                  <Swords size={18} color="#ef4444" />
-                  <span style={{ fontWeight: "bold", color: "#ffffff", fontSize: "13px" }}>
-                    2. Kaos (PvP + Düşman)
+                  <Swords size={17} color="#dc2626" />
+                  <span style={{ fontWeight: 800, color: "#18181b", fontSize: "13px" }}>
+                    Kaos (PvP + Düşman)
                   </span>
                 </div>
                 <p style={styles.modeDesc}>
-                  Hem düşmanları öldür hem de arkadaşlarınla birbirinizi vurun! Dost ateşi açık.
+                  Hem düşmanlarla hem arkadaşlarınla savaş. Dost ateşi açık.
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Join Tabs: Open Room vs Invite Code */}
+          {/* Join Tabs */}
           <div>
             <div style={styles.tabRow}>
               <button
@@ -136,21 +133,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 onClick={() => setJoinTab("public")}
                 style={{
                   ...styles.tabBtn,
-                  backgroundColor: joinTab === "public" ? "#1e293b" : "transparent",
-                  color: joinTab === "public" ? "#38bdf8" : "#94a3b8",
-                  borderColor: joinTab === "public" ? "#38bdf8" : "#334155",
+                  backgroundColor: joinTab === "public" ? "#18181b" : "#f4f4f5",
+                  color: joinTab === "public" ? "#ffffff" : "#52525b",
                 }}
               >
-                🌐 Hızlı / Yeni Oda
+                Hızlı / Yeni Oda
               </button>
               <button
                 type="button"
                 onClick={() => setJoinTab("friend")}
                 style={{
                   ...styles.tabBtn,
-                  backgroundColor: joinTab === "friend" ? "#1e293b" : "transparent",
-                  color: joinTab === "friend" ? "#38bdf8" : "#94a3b8",
-                  borderColor: joinTab === "friend" ? "#38bdf8" : "#334155",
+                  backgroundColor: joinTab === "friend" ? "#18181b" : "#f4f4f5",
+                  color: joinTab === "friend" ? "#ffffff" : "#52525b",
                 }}
               >
                 <Users size={14} /> Arkadaş Odasına Katıl
@@ -171,17 +166,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             )}
           </div>
 
-          {error && <div style={styles.errorText}>⚠️ {error}</div>}
+          {error && <div style={styles.errorText}>{error}</div>}
 
           <div style={{ display: "flex", gap: "10px" }}>
             <button type="submit" disabled={isLoading} style={{ ...styles.button, flex: 1 }}>
               {isLoading ? (
-                <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Sparkles size={18} /> Bağlanılıyor...
-                </span>
+                <span>Bağlanılıyor...</span>
               ) : (
                 <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Play size={18} fill="#ffffff" />{" "}
+                  <Play size={16} fill="#ffffff" />{" "}
                   {joinTab === "friend" ? "Odaya Katıl" : "Savaşa Başla"}
                 </span>
               )}
@@ -193,22 +186,29 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 disabled={isLoading}
                 onClick={(e) => handleSubmit(e, true)}
                 style={styles.secondaryButton}
-                title="Arkadaşlarını davet etmek için sıfırdan özel oda aç"
+                title="Arkadaşlarını davet etmek için özel oda aç"
               >
-                <PlusCircle size={17} /> Özel Oda Kur
+                <PlusCircle size={16} /> Özel Oda
               </button>
             )}
           </div>
         </form>
 
-        {/* How to Play Box */}
+        {/* Clean Controls Box */}
         <div style={styles.howToPlay}>
-          <div style={styles.howToTitle}>🎮 NASIL OYNANIR?</div>
+          <div style={styles.howToTitle}>KONTROLLER</div>
           <div style={styles.howToGrid}>
-            <div>🏃 <b>Hareket:</b> <span style={styles.keyTag}>W A S D</span> veya <span style={styles.keyTag}>Ok Tuşları</span></div>
-            <div>🎯 <b>Nişan & Ateş:</b> <span style={styles.keyTag}>Mouse</span> ile nişan al, <span style={styles.keyTag}>Sol Tık</span> / <span style={styles.keyTag}>Boşluk</span> ile ateş et</div>
-            <div>🪨 <b>Siper Al:</b> Etraftaki kayalar, metal duvarlar ve enerji sütunları mermileri durdurur!</div>
-            <div>💚 <b>Can & Puan:</b> Sarı/yeşil küreleri toplayarak canını (+8 HP) doldur.</div>
+            <div>
+              <b>Hareket:</b> <span style={styles.keyTag}>W A S D</span> veya{" "}
+              <span style={styles.keyTag}>Ok Tuşları</span>
+            </div>
+            <div>
+              <b>Ateş Etme:</b> <span style={styles.keyTag}>Sol Tık</span> veya{" "}
+              <span style={styles.keyTag}>Boşluk</span>
+            </div>
+            <div>
+              <b>Siper & Can:</b> Engeller mermileri durdurur, yerdeki küreler +8 HP verir.
+            </div>
           </div>
         </div>
       </div>
@@ -223,27 +223,30 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "radial-gradient(circle at center, #1e293b 0%, #090d16 100%)",
+    backgroundColor: "#f4f6f9",
+    backgroundImage: "radial-gradient(#d8dee9 1.2px, transparent 1.2px)",
+    backgroundSize: "24px 24px",
+    padding: "16px",
   },
   card: {
-    width: "470px",
-    maxWidth: "94vw",
-    backgroundColor: "rgba(30, 41, 59, 0.82)",
-    backdropFilter: "blur(16px)",
-    border: "1px solid rgba(255, 255, 255, 0.12)",
+    width: "460px",
+    maxWidth: "95vw",
+    backgroundColor: "#ffffff",
+    border: "1px solid #e4e4e7",
     borderRadius: "20px",
     padding: "26px",
-    boxShadow: "0 20px 50px rgba(0, 0, 0, 0.6)",
+    boxShadow: "0 12px 32px rgba(24, 24, 27, 0.08)",
     display: "flex",
     flexDirection: "column",
-    gap: "18px",
+    gap: "16px",
+    color: "#18181b",
   },
   backPortalBtn: {
     alignSelf: "flex-start",
-    backgroundColor: "rgba(15, 23, 42, 0.7)",
-    border: "1px solid rgba(56, 189, 248, 0.35)",
-    color: "#38bdf8",
-    borderRadius: "10px",
+    backgroundColor: "#f4f4f5",
+    border: "1px solid #e4e4e7",
+    color: "#3f3f46",
+    borderRadius: "9px",
     padding: "6px 12px",
     fontSize: "12px",
     fontWeight: 700,
@@ -251,6 +254,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: "6px",
+    fontFamily: "inherit",
   },
   logoRow: {
     display: "flex",
@@ -258,33 +262,32 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "14px",
   },
   iconCircle: {
-    width: "52px",
-    height: "52px",
-    borderRadius: "16px",
-    backgroundColor: "rgba(56, 189, 248, 0.15)",
+    width: "48px",
+    height: "48px",
+    borderRadius: "14px",
+    backgroundColor: "#24302a",
+    borderBottom: "3px solid #171f1b",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    border: "1px solid rgba(56, 189, 248, 0.3)",
   },
   title: {
     margin: 0,
     fontSize: "20px",
-    fontWeight: "800",
-    letterSpacing: "0.8px",
-    color: "#ffffff",
+    fontWeight: 800,
+    color: "#18181b",
   },
   subtitle: {
-    margin: 0,
+    margin: "2px 0 0 0",
     fontSize: "12px",
-    color: "#94a3b8",
+    color: "#71717a",
   },
   verifiedRow: {
     display: "flex",
     alignItems: "center",
     gap: "8px",
-    backgroundColor: "rgba(34, 197, 94, 0.12)",
-    border: "1px solid rgba(34, 197, 94, 0.3)",
+    backgroundColor: "#f0fdf4",
+    border: "1px solid #bbf7d0",
     borderRadius: "10px",
     padding: "9px 12px",
   },
@@ -295,21 +298,22 @@ const styles: Record<string, React.CSSProperties> = {
   },
   label: {
     fontSize: "12px",
-    fontWeight: 600,
-    color: "#cbd5e1",
+    fontWeight: 700,
+    color: "#3f3f46",
     marginBottom: "6px",
     display: "block",
   },
   input: {
     width: "100%",
     boxSizing: "border-box",
-    backgroundColor: "#0f172a",
-    border: "1px solid #334155",
+    backgroundColor: "#fafafa",
+    border: "1.5px solid #e4e4e7",
     borderRadius: "10px",
     padding: "11px 14px",
-    color: "#ffffff",
+    color: "#18181b",
     fontSize: "14px",
     outline: "none",
+    fontFamily: "inherit",
   },
   modeGrid: {
     display: "grid",
@@ -317,7 +321,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "10px",
   },
   modeCard: {
-    border: "2px solid #334155",
+    border: "2px solid #e4e4e7",
     borderRadius: "12px",
     padding: "12px",
     cursor: "pointer",
@@ -332,8 +336,8 @@ const styles: Record<string, React.CSSProperties> = {
   modeDesc: {
     margin: 0,
     fontSize: "11px",
-    color: "#94a3b8",
-    lineHeight: 1.35,
+    color: "#52525b",
+    lineHeight: 1.4,
   },
   tabRow: {
     display: "grid",
@@ -341,80 +345,86 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "8px",
   },
   tabBtn: {
-    padding: "8px 10px",
-    borderRadius: "8px",
-    border: "1px solid #334155",
+    padding: "9px 10px",
+    borderRadius: "9px",
+    border: "none",
     fontSize: "12px",
-    fontWeight: 600,
+    fontWeight: 700,
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     gap: "6px",
+    fontFamily: "inherit",
   },
   button: {
-    backgroundColor: "#0284c7",
+    backgroundColor: "#f05232",
     color: "#ffffff",
     border: "none",
-    borderRadius: "10px",
+    borderBottom: "3px solid #c93b1e",
+    borderRadius: "11px",
     padding: "13px",
     fontSize: "14px",
-    fontWeight: "bold",
+    fontWeight: 800,
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0 4px 14px rgba(2, 132, 199, 0.4)",
+    fontFamily: "inherit",
   },
   secondaryButton: {
-    backgroundColor: "#1e293b",
-    color: "#38bdf8",
-    border: "1px solid rgba(56, 189, 248, 0.4)",
-    borderRadius: "10px",
-    padding: "13px 14px",
+    backgroundColor: "#ffffff",
+    color: "#18181b",
+    border: "1.5px solid #e4e4e7",
+    borderBottom: "3px solid #d4d4d8",
+    borderRadius: "11px",
+    padding: "12px 14px",
     fontSize: "13px",
-    fontWeight: "bold",
+    fontWeight: 700,
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     gap: "6px",
+    fontFamily: "inherit",
   },
   errorText: {
-    color: "#f87171",
+    color: "#b91c1c",
     fontSize: "12px",
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
-    padding: "8px 12px",
-    borderRadius: "8px",
-    border: "1px solid rgba(239, 68, 68, 0.2)",
+    fontWeight: 600,
+    backgroundColor: "#fef2f2",
+    padding: "9px 12px",
+    borderRadius: "9px",
+    border: "1px solid #fecaca",
   },
   howToPlay: {
-    backgroundColor: "rgba(15, 23, 42, 0.75)",
-    border: "1px solid rgba(56, 189, 248, 0.25)",
+    backgroundColor: "#fafafa",
+    border: "1px solid #e4e4e7",
     borderRadius: "12px",
     padding: "12px 14px",
   },
   howToTitle: {
-    fontSize: "12px",
-    fontWeight: "bold",
-    color: "#38bdf8",
+    fontSize: "11px",
+    fontWeight: 800,
+    color: "#71717a",
     marginBottom: "8px",
     letterSpacing: "0.5px",
   },
   howToGrid: {
     display: "flex",
     flexDirection: "column",
-    gap: "6px",
+    gap: "5px",
     fontSize: "12px",
-    color: "#cbd5e1",
-    lineHeight: 1.4,
+    color: "#3f3f46",
+    lineHeight: 1.45,
   },
   keyTag: {
-    backgroundColor: "#1e293b",
-    border: "1px solid #475569",
-    borderRadius: "4px",
-    padding: "1px 5px",
+    backgroundColor: "#ffffff",
+    border: "1px solid #d4d4d8",
+    borderBottom: "2px solid #a1a1aa",
+    borderRadius: "5px",
+    padding: "1px 6px",
     fontSize: "11px",
-    color: "#facc15",
-    fontWeight: 600,
+    color: "#18181b",
+    fontWeight: 700,
   },
 };

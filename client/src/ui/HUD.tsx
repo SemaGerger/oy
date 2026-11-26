@@ -13,8 +13,11 @@ import {
   Skull,
   Heart,
   Flame,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { EventBus } from "../game/EventBus";
+import { useTheme } from "../theme/ThemeContext";
 
 interface PlayerInfo {
   id: string;
@@ -58,6 +61,7 @@ interface HUDProps {
 }
 
 export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
+  const { isOffice, toggleTheme } = useTheme();
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
   const [gameInfo, setGameInfo] = useState<GameInfo>({
     wave: 1,
@@ -138,45 +142,88 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
   const isPvp = gameInfo.gameMode === "pvp";
   const isHost = !gameInfo.hostId || gameInfo.hostId === room.sessionId;
 
+  const panelBg = isOffice ? "#ffffff" : "rgba(28, 25, 23, 0.92)";
+  const panelBorder = isOffice ? "1px solid #cbd5e1" : "1px solid #44403c";
+  const panelText = isOffice ? "#0f172a" : "#fafaf9";
+
   return (
     <div style={styles.overlay}>
       {/* Respawn Banner when Local Player is Dead */}
       {localPlayer?.isDead && (
-        <div style={styles.deadModal}>
-          <Skull size={42} color="#ef4444" />
-          <div style={{ fontSize: "20px", fontWeight: 800, color: "#ffffff" }}>
-            ÖLDÜNÜZ!
+        <div
+          style={{
+            ...styles.deadModal,
+            backgroundColor: isOffice ? "#ffffff" : "rgba(28, 25, 23, 0.95)",
+            border: isOffice ? "2px solid #94a3b8" : "2px solid #f05232",
+            boxShadow: isOffice ? "0 8px 24px rgba(15,23,42,0.12)" : "0 0 30px rgba(0,0,0,0.5)",
+          }}
+        >
+          {!isOffice && <Skull size={38} color="#f05232" />}
+          <div style={{ fontSize: "19px", fontWeight: 800, color: panelText }}>
+            {isOffice ? "Yeniden Senkronize Ediliyor..." : "ÖLDÜNÜZ!"}
           </div>
-          <div style={{ fontSize: "13px", color: "#cbd5e1" }}>
-            Yeniden doğuluyor... ({Math.max(1, Math.ceil(localPlayer.respawnTimer))} sn)
+          <div style={{ fontSize: "13px", color: isOffice ? "#475569" : "#d6d3d1" }}>
+            {isOffice
+              ? `Bağlantı yenileniyor (${Math.max(1, Math.ceil(localPlayer.respawnTimer))} sn)`
+              : `Yeniden doğuluyor... (${Math.max(1, Math.ceil(localPlayer.respawnTimer))} sn)`}
           </div>
         </div>
       )}
 
       {/* Top Bar */}
       <div style={styles.topBar}>
-        {/* Left: Poki Portal Home Button, Wave, Enemy Count, Mode Switcher & Friend Invite */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+        {/* Left Controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           {onBackToPortal && (
             <button
               onClick={onBackToPortal}
-              style={styles.portalHomeBtn}
-              title="Odadan ayrıl ve Sitecont Game ana sayfasına dön"
+              style={{
+                ...styles.portalHomeBtn,
+                backgroundColor: isOffice ? "#2563eb" : "#f05232",
+                borderBottom: isOffice ? "2px solid #1d4ed8" : "3px solid #c93b1e",
+              }}
+              title="Ana sayfaya dön"
             >
-              🏠 SITECONT GAME
+              {isOffice ? "Workspace" : "SITECONT GAME"}
             </button>
           )}
 
-          <div style={styles.badge}>
-            <Flame size={16} color="#f97316" />
-            <span style={{ fontWeight: 800, color: "#f97316" }}>DALGA {gameInfo.wave}</span>
-            <span style={styles.divider}>•</span>
-            <span style={{ color: "#ef4444", fontSize: "12px", fontWeight: 600 }}>
-              👾 {gameInfo.enemyCount} Düşman
+          {/* Instant Office (Light) / Fun (Dark) Panic Toggle */}
+          <button
+            onClick={toggleTheme}
+            style={{
+              ...styles.inviteBtn,
+              backgroundColor: panelBg,
+              border: panelBorder,
+              color: panelText,
+            }}
+            title="Anında Ofis (Light) / Eğlence (Dark) modu değiştir (Kısayol: Shift + O)"
+          >
+            {isOffice ? <Moon size={14} color="#2563eb" /> : <Sun size={14} color="#fbbf24" />}
+            <span>{isOffice ? "Eğlence Modu" : "Ofis Modu"}</span>
+          </button>
+
+          <div
+            style={{
+              ...styles.badge,
+              backgroundColor: panelBg,
+              border: panelBorder,
+              color: panelText,
+            }}
+          >
+            {!isOffice && <Flame size={15} color="#f97316" />}
+            <span style={{ fontWeight: 800, color: isOffice ? "#2563eb" : "#fbbf24" }}>
+              {isOffice ? `Aşama ${gameInfo.wave}` : `DALGA ${gameInfo.wave}`}
             </span>
             <span style={styles.divider}>•</span>
-            <Users size={14} color="#94a3b8" />
-            <span style={{ color: "#94a3b8", fontSize: "12px" }}>{players.length} Oyuncu</span>
+            <span style={{ color: isOffice ? "#475569" : "#f87171", fontSize: "12px", fontWeight: 600 }}>
+              {isOffice ? `${gameInfo.enemyCount} Kayıt` : `${gameInfo.enemyCount} Düşman`}
+            </span>
+            <span style={styles.divider}>•</span>
+            <Users size={14} color={isOffice ? "#64748b" : "#a8a29e"} />
+            <span style={{ color: isOffice ? "#64748b" : "#a8a29e", fontSize: "12px" }}>
+              {players.length} {isOffice ? "Kullanıcı" : "Oyuncu"}
+            </span>
           </div>
 
           {/* Mode Toggle Button */}
@@ -184,49 +231,83 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
             onClick={handleToggleMode}
             style={{
               ...styles.modeToggleBtn,
-              backgroundColor: isPvp ? "rgba(239, 68, 68, 0.85)" : "rgba(34, 197, 94, 0.85)",
-              borderColor: isPvp ? "#f87171" : "#4ade80",
+              backgroundColor: isOffice
+                ? "#ffffff"
+                : isPvp
+                  ? "rgba(220, 38, 38, 0.9)"
+                  : "rgba(22, 163, 74, 0.9)",
+              borderColor: isOffice ? "#cbd5e1" : isPvp ? "#ef4444" : "#22c55e",
+              color: isOffice ? "#0f172a" : "#ffffff",
               cursor: isHost ? "pointer" : "not-allowed",
             }}
             title={
               isHost
                 ? "Oda sahibi olarak oyun modunu değiştirmek için tıkla"
-                : "Sadece Oda Sahibi (👑) oyun modunu değiştirebilir"
+                : "Sadece Oda Sahibi oyun modunu değiştirebilir"
             }
           >
-            {isPvp ? <Swords size={15} /> : <Shield size={15} />}
+            {isPvp ? <Swords size={14} /> : <Shield size={14} />}
             <span>
-              {isPvp
-                ? "MOD: KAOS / PvP (Arkadaşları Vurma Açık)"
-                : "MOD: CO-OP (Birlikte Düşmanlara Karşı)"}
+              {isOffice
+                ? isPvp
+                  ? "Mod: Serbest (PvP)"
+                  : "Mod: Ortak (Co-op)"
+                : isPvp
+                  ? "KAOS / PvP"
+                  : "CO-OP (Birlikte)"}
             </span>
-            {isHost && <span style={styles.switchTag}>👑 Değiştir</span>}
+            {isHost && (
+              <span
+                style={{
+                  ...styles.switchTag,
+                  backgroundColor: isOffice ? "#eff6ff" : "rgba(0,0,0,0.28)",
+                  color: isOffice ? "#1d4ed8" : "#ffffff",
+                }}
+              >
+                Değiştir
+              </span>
+            )}
           </button>
 
           {/* Invite Friend Button */}
           <button
             onClick={handleCopyInvite}
-            style={styles.inviteBtn}
-            title="Arkadaşını bu odaya davet etmek için davet linkini kopyala"
+            style={{
+              ...styles.inviteBtn,
+              backgroundColor: panelBg,
+              border: panelBorder,
+              color: panelText,
+            }}
+            title="Oda davet linkini kopyala"
           >
-            {copied ? <Check size={14} color="#4ade80" /> : <Copy size={14} color="#38bdf8" />}
+            {copied ? (
+              <Check size={14} color="#16a34a" />
+            ) : (
+              <Copy size={14} color={isOffice ? "#2563eb" : "#fbbf24"} />
+            )}
             <span>
-              {copied ? "Davet Linki Kopyalandı!" : `Arkadaş Davet Et (Kod: ${room.roomId})`}
+              {copied ? "Link Kopyalandı!" : `Davet (${room.roomId})`}
             </span>
           </button>
         </div>
 
         {/* Right: Local Player HP & Score */}
         {localPlayer && (
-          <div style={styles.myStats}>
+          <div
+            style={{
+              ...styles.myStats,
+              backgroundColor: panelBg,
+              border: panelBorder,
+              color: panelText,
+            }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <div
                 style={{
-                  width: 13,
-                  height: 13,
+                  width: 12,
+                  height: 12,
                   borderRadius: "50%",
                   backgroundColor: localPlayer.color,
-                  boxShadow: `0 0 8px ${localPlayer.color}`,
                 }}
               />
               <span style={{ fontWeight: 700 }}>{localPlayer.name}</span>
@@ -270,10 +351,24 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
       )}
 
       {/* Leaderboard Panel (Top Right) */}
-      <div style={styles.leaderboard}>
-        <div style={styles.leaderboardHeader}>
-          <Trophy size={16} color="#facc15" />
-          <span style={{ fontWeight: "bold", fontSize: "13px" }}>SKOR & AV TABLOSU</span>
+      <div
+        style={{
+          ...styles.leaderboard,
+          backgroundColor: panelBg,
+          border: panelBorder,
+          color: panelText,
+        }}
+      >
+        <div
+          style={{
+            ...styles.leaderboardHeader,
+            borderBottom: isOffice ? "1px solid #e2e8f0" : "1px solid #292524",
+          }}
+        >
+          {!isOffice && <Trophy size={15} color="#fbbf24" />}
+          <span style={{ fontWeight: 800, fontSize: "12px" }}>
+            {isOffice ? "PERFORMANS ÖZETİ" : "SKOR & AV TABLOSU"}
+          </span>
         </div>
         <div style={styles.leaderboardList}>
           {players.slice(0, 8).map((p, index) => (
@@ -281,25 +376,38 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
               key={p.id}
               style={{
                 ...styles.leaderboardItem,
-                backgroundColor: p.isLocal ? "rgba(56, 189, 248, 0.16)" : "transparent",
-                borderLeft: p.isLocal ? "3px solid #38bdf8" : "3px solid transparent",
+                backgroundColor: p.isLocal
+                  ? isOffice
+                    ? "#eff6ff"
+                    : "rgba(251, 191, 36, 0.12)"
+                  : "transparent",
+                borderLeft: p.isLocal
+                  ? isOffice
+                    ? "3px solid #2563eb"
+                    : "3px solid #fbbf24"
+                  : "3px solid transparent",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <span
                   style={{
-                    color: index < 3 ? "#facc15" : "#64748b",
+                    color: index < 3 ? (isOffice ? "#2563eb" : "#fbbf24") : "#64748b",
                     fontSize: "12px",
                     width: "16px",
+                    fontWeight: 700,
                   }}
                 >
                   #{index + 1}
                 </span>
                 <span
                   style={{
-                    color: p.isLocal ? "#38bdf8" : "#f1f5f9",
+                    color: p.isLocal
+                      ? isOffice
+                        ? "#1d4ed8"
+                        : "#fbbf24"
+                      : panelText,
                     fontSize: "12px",
-                    fontWeight: p.isLocal ? "bold" : "normal",
+                    fontWeight: p.isLocal ? 800 : 500,
                     textDecoration: p.isDead ? "line-through" : "none",
                   }}
                 >
@@ -307,11 +415,16 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-                <span style={{ color: "#f87171" }} title="Öldürme">
-                  💀 {p.kills}
+                <span style={{ color: isOffice ? "#64748b" : "#f87171" }}>
+                  {isOffice ? `${p.kills} işlem` : `💀 ${p.kills}`}
                 </span>
-                <span style={{ color: "#facc15", fontWeight: "bold" }} title="Skor">
-                  ⭐ {p.score}
+                <span
+                  style={{
+                    color: isOffice ? "#0f172a" : "#fbbf24",
+                    fontWeight: 800,
+                  }}
+                >
+                  {isOffice ? `${p.score}p` : `⭐ ${p.score}`}
                 </span>
               </div>
             </div>
@@ -320,34 +433,70 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
       </div>
 
       {/* Controls Hint (Bottom Right) */}
-      <div style={styles.controlsHint}>
+      <div
+        style={{
+          ...styles.controlsHint,
+          backgroundColor: panelBg,
+          border: panelBorder,
+          color: panelText,
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-          <Compass size={14} color="#38bdf8" />
-          <span style={{ fontWeight: "bold", fontSize: "11px", color: "#94a3b8" }}>
-            SAVAŞ KONTROLLERİ
+          <Compass size={13} color={isOffice ? "#2563eb" : "#fbbf24"} />
+          <span
+            style={{
+              fontWeight: 800,
+              fontSize: "11px",
+              color: isOffice ? "#64748b" : "#a8a29e",
+            }}
+          >
+            {isOffice ? "KISAYOLLAR" : "SAVAŞ KONTROLLERİ"}
           </span>
         </div>
-        <div style={{ fontSize: "12px", color: "#cbd5e1", lineHeight: 1.45 }}>
+        <div
+          style={{
+            fontSize: "11px",
+            color: isOffice ? "#475569" : "#d6d3d1",
+            lineHeight: 1.5,
+          }}
+        >
           <div>
             <kbd style={styles.kbd}>W A S D</kbd> / <kbd style={styles.kbd}>Oklar</kbd> : Hareket
           </div>
           <div style={{ marginTop: "3px" }}>
-            <kbd style={styles.kbd}>Sol Tık</kbd> veya <kbd style={styles.kbd}>Boşluk</kbd> : Ateş Et
+            <kbd style={styles.kbd}>Sol Tık</kbd> / <kbd style={styles.kbd}>Boşluk</kbd> : Ateş Et
           </div>
-          <div style={{ marginTop: "3px", color: "#4ade80" }}>
-            💚 Düşmanlardan düşen küreler Can (+8 HP) ve Puan verir!
+          <div style={{ marginTop: "3px" }}>
+            <kbd style={styles.kbd}>Shift + O</kbd> : Ofis / Eğlence Modu
           </div>
         </div>
       </div>
 
       {/* Chat Box (Bottom Left) */}
-      <div style={styles.chatContainer}>
-        <div style={styles.chatHeader} onClick={() => setShowChat(!showChat)}>
+      <div
+        style={{
+          ...styles.chatContainer,
+          backgroundColor: panelBg,
+          border: panelBorder,
+          color: panelText,
+        }}
+      >
+        <div
+          style={{
+            ...styles.chatHeader,
+            backgroundColor: isOffice ? "#f8fafc" : "#292524",
+            borderBottom: isOffice ? "1px solid #e2e8f0" : "1px solid #44403c",
+            color: panelText,
+          }}
+          onClick={() => setShowChat(!showChat)}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <MessageSquare size={15} color="#38bdf8" />
-            <span style={{ fontSize: "12px", fontWeight: "bold" }}>Takım & Oda Sohbeti</span>
+            <MessageSquare size={14} color={isOffice ? "#2563eb" : "#fbbf24"} />
+            <span style={{ fontSize: "12px", fontWeight: 700 }}>
+              {isOffice ? "Ekip Notları" : "Takım & Oda Sohbeti"}
+            </span>
           </div>
-          <span style={{ fontSize: "10px", color: "#94a3b8" }}>{showChat ? "Gizle" : "Aç"}</span>
+          <span style={{ fontSize: "10px", color: "#64748b" }}>{showChat ? "Gizle" : "Aç"}</span>
         </div>
 
         {showChat && (
@@ -355,30 +504,63 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
             <div style={styles.chatMessages}>
               {messages.length === 0 && (
                 <div style={{ color: "#64748b", fontSize: "11px", fontStyle: "italic" }}>
-                  Arkadaşlarını davet et ve sohbete başla!
+                  {isOffice ? "Henüz not eklenmedi." : "Arkadaşlarını davet et ve sohbete başla!"}
                 </div>
               )}
               {messages.map((m, i) => (
                 <div key={i} style={styles.chatMessageItem}>
-                  <span style={{ color: m.color, fontWeight: "bold", marginRight: "6px" }}>
+                  <span
+                    style={{
+                      color: isOffice ? "#2563eb" : m.color,
+                      fontWeight: 700,
+                      marginRight: "6px",
+                    }}
+                  >
                     {m.name}:
                   </span>
-                  <span style={{ color: m.isSystem ? "#fde047" : "#f1f5f9" }}>{m.text}</span>
+                  <span
+                    style={{
+                      color: m.isSystem
+                        ? isOffice
+                          ? "#475569"
+                          : "#fde047"
+                        : panelText,
+                    }}
+                  >
+                    {m.text}
+                  </span>
                 </div>
               ))}
               <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={handleSendChat} style={styles.chatForm}>
+            <form
+              onSubmit={handleSendChat}
+              style={{
+                ...styles.chatForm,
+                borderTop: isOffice ? "1px solid #e2e8f0" : "1px solid #292524",
+              }}
+            >
               <input
                 type="text"
-                placeholder="Mesaj yaz..."
+                placeholder={isOffice ? "Not ekle..." : "Mesaj yaz..."}
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 maxLength={80}
-                style={styles.chatInput}
+                style={{
+                  ...styles.chatInput,
+                  backgroundColor: isOffice ? "#f8fafc" : "#292524",
+                  border: isOffice ? "1px solid #cbd5e1" : "1px solid #44403c",
+                  color: panelText,
+                }}
               />
-              <button type="submit" style={styles.chatSendBtn}>
+              <button
+                type="submit"
+                style={{
+                  ...styles.chatSendBtn,
+                  backgroundColor: isOffice ? "#2563eb" : "#f05232",
+                }}
+              >
                 <Send size={13} color="#ffffff" />
               </button>
             </form>
@@ -424,34 +606,33 @@ const styles: Record<string, React.CSSProperties> = {
   },
   portalHomeBtn: {
     pointerEvents: "auto",
-    background: "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)",
-    color: "#0f172a",
+    backgroundColor: "#f05232",
+    color: "#ffffff",
     border: "none",
-    borderRadius: "12px",
-    padding: "8px 14px",
+    borderBottom: "3px solid #c93b1e",
+    borderRadius: "10px",
+    padding: "7px 14px",
     fontSize: "12px",
-    fontWeight: 900,
+    fontWeight: 800,
     cursor: "pointer",
-    boxShadow: "0 4px 12px rgba(56, 189, 248, 0.35)",
+    fontFamily: "inherit",
   },
   badge: {
     pointerEvents: "auto",
-    backgroundColor: "rgba(15, 23, 42, 0.85)",
-    backdropFilter: "blur(8px)",
-    border: "1px solid rgba(255, 255, 255, 0.1)",
-    borderRadius: "12px",
+    backgroundColor: "rgba(28, 25, 23, 0.92)",
+    border: "1px solid #44403c",
+    borderRadius: "10px",
     padding: "8px 14px",
     display: "flex",
     alignItems: "center",
     gap: "8px",
-    color: "#ffffff",
+    color: "#fafaf9",
     fontSize: "13px",
-    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
   },
   modeToggleBtn: {
     pointerEvents: "auto",
     border: "1px solid",
-    borderRadius: "12px",
+    borderRadius: "10px",
     padding: "8px 12px",
     display: "flex",
     alignItems: "center",
@@ -460,45 +641,44 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "12px",
     fontWeight: 700,
     cursor: "pointer",
-    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+    fontFamily: "inherit",
   },
   switchTag: {
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    backgroundColor: "rgba(0, 0, 0, 0.28)",
     padding: "2px 6px",
     borderRadius: "6px",
     fontSize: "10px",
   },
   inviteBtn: {
     pointerEvents: "auto",
-    backgroundColor: "rgba(15, 23, 42, 0.85)",
-    border: "1px solid rgba(56, 189, 248, 0.4)",
-    borderRadius: "12px",
+    backgroundColor: "rgba(28, 25, 23, 0.92)",
+    border: "1px solid #57534e",
+    borderRadius: "10px",
     padding: "8px 12px",
     display: "flex",
     alignItems: "center",
     gap: "6px",
-    color: "#e2e8f0",
+    color: "#f5f5f4",
     fontSize: "12px",
-    fontWeight: 600,
+    fontWeight: 700,
     cursor: "pointer",
+    fontFamily: "inherit",
   },
   divider: {
-    color: "#475569",
+    color: "#57534e",
     fontSize: "12px",
   },
   myStats: {
     pointerEvents: "auto",
-    backgroundColor: "rgba(15, 23, 42, 0.88)",
-    backdropFilter: "blur(8px)",
-    border: "1px solid rgba(56, 189, 248, 0.3)",
-    borderRadius: "12px",
+    backgroundColor: "rgba(28, 25, 23, 0.92)",
+    border: "1px solid #44403c",
+    borderRadius: "10px",
     padding: "8px 14px",
     display: "flex",
     alignItems: "center",
     gap: "14px",
-    color: "#ffffff",
+    color: "#fafaf9",
     fontSize: "13px",
-    boxShadow: "0 4px 16px rgba(0, 0, 0, 0.4)",
   },
   hpBarWrap: {
     display: "flex",
@@ -508,10 +688,10 @@ const styles: Record<string, React.CSSProperties> = {
   hpBarOuter: {
     width: "80px",
     height: "8px",
-    backgroundColor: "#1e293b",
+    backgroundColor: "#292524",
     borderRadius: "4px",
     overflow: "hidden",
-    border: "1px solid #334155",
+    border: "1px solid #44403c",
   },
   hpBarInner: {
     height: "100%",
@@ -526,8 +706,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "4px",
   },
   killFeedItem: {
-    backgroundColor: "rgba(15, 23, 42, 0.78)",
-    borderLeft: "3px solid #ef4444",
+    backgroundColor: "rgba(28, 25, 23, 0.88)",
+    borderLeft: "3px solid #f05232",
     padding: "4px 10px",
     borderRadius: "6px",
     fontSize: "11px",
@@ -538,19 +718,17 @@ const styles: Record<string, React.CSSProperties> = {
     top: "64px",
     right: "14px",
     width: "230px",
-    backgroundColor: "rgba(15, 23, 42, 0.85)",
-    backdropFilter: "blur(8px)",
-    border: "1px solid rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(28, 25, 23, 0.92)",
+    border: "1px solid #44403c",
     borderRadius: "12px",
     padding: "12px",
-    color: "#ffffff",
-    boxShadow: "0 8px 24px rgba(0, 0, 0, 0.4)",
+    color: "#fafaf9",
   },
   leaderboardHeader: {
     display: "flex",
     alignItems: "center",
     gap: "6px",
-    borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+    borderBottom: "1px solid #292524",
     paddingBottom: "8px",
     marginBottom: "8px",
   },
@@ -571,33 +749,30 @@ const styles: Record<string, React.CSSProperties> = {
     position: "absolute",
     bottom: "14px",
     right: "14px",
-    backgroundColor: "rgba(15, 23, 42, 0.85)",
-    backdropFilter: "blur(8px)",
-    border: "1px solid rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(28, 25, 23, 0.92)",
+    border: "1px solid #44403c",
     borderRadius: "12px",
     padding: "10px 14px",
-    color: "#ffffff",
-    boxShadow: "0 4px 16px rgba(0, 0, 0, 0.3)",
+    color: "#fafaf9",
   },
   kbd: {
-    backgroundColor: "#1e293b",
-    border: "1px solid #475569",
+    backgroundColor: "#292524",
+    border: "1px solid #57534e",
     borderRadius: "4px",
     padding: "1px 5px",
     fontSize: "10px",
-    color: "#38bdf8",
+    color: "#fbbf24",
+    fontWeight: 700,
   },
   chatContainer: {
     pointerEvents: "auto",
     width: "300px",
-    backgroundColor: "rgba(15, 23, 42, 0.88)",
-    backdropFilter: "blur(8px)",
-    border: "1px solid rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(28, 25, 23, 0.92)",
+    border: "1px solid #44403c",
     borderRadius: "12px",
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
-    boxShadow: "0 8px 24px rgba(0, 0, 0, 0.4)",
   },
   chatHeader: {
     padding: "8px 12px",
@@ -605,9 +780,9 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "center",
     cursor: "pointer",
-    backgroundColor: "rgba(30, 41, 59, 0.5)",
-    borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
-    color: "#ffffff",
+    backgroundColor: "#292524",
+    borderBottom: "1px solid #44403c",
+    color: "#fafaf9",
   },
   chatMessages: {
     height: "125px",
@@ -625,20 +800,21 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     padding: "6px",
     gap: "6px",
-    borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+    borderTop: "1px solid #292524",
   },
   chatInput: {
     flex: 1,
-    backgroundColor: "#1e293b",
-    border: "1px solid #334155",
+    backgroundColor: "#292524",
+    border: "1px solid #44403c",
     borderRadius: "6px",
     padding: "6px 8px",
     fontSize: "12px",
-    color: "#ffffff",
+    color: "#fafaf9",
     outline: "none",
+    fontFamily: "inherit",
   },
   chatSendBtn: {
-    backgroundColor: "#0284c7",
+    backgroundColor: "#f05232",
     border: "none",
     borderRadius: "6px",
     width: "30px",

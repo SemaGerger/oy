@@ -10,7 +10,7 @@ export const createPhaserGame = (parent: HTMLElement, room: Room): Phaser.Game =
     parent: parent,
     width: "100%",
     height: "100%",
-    backgroundColor: "#0b0f19",
+    backgroundColor: "#232d28",
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.CENTER_BOTH,
