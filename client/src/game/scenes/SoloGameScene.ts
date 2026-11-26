@@ -91,12 +91,19 @@ export class SoloGameScene extends Phaser.Scene {
     D: Phaser.Input.Keyboard.Key;
   };
   private isDragging = false;
+  private activePointerId: number | null = null;
   private dragOriginX = 0;
   private dragOriginY = 0;
   private dragDx = 0;
   private dragDy = 0;
   private joyBase: Phaser.GameObjects.Arc | null = null;
   private joyThumb: Phaser.GameObjects.Arc | null = null;
+
+  // Dash / Dodge state
+  private lastDashTime = 0;
+  private dashEndTime = 0;
+  private dashVx = 0;
+  private dashVy = 0;
 
   private lastHudEmit = 0;
 
@@ -111,7 +118,70 @@ export class SoloGameScene extends Phaser.Scene {
     this.rebuildObstacleVisuals();
   };
 
+  private screenToHud(sx: number, sy: number) {
+    const cam = this.cameras.main;
+    const zoom = cam.zoom || 1;
+    const cx = cam.width * 0.5;
+    const cy = cam.height * 0.5;
+    return {
+      x: cx + (sx - cx) / zoom,
+      y: cy + (sy - cy) / zoom,
+      invZoom: 1 / zoom,
+    };
+  }
+
+  private placeIdleJoystickGuide() {
+    if (!this.joyBase || !this.joyThumb) return;
+    const isTouchLayout = this.scale.width < 900;
+    if (!isTouchLayout) {
+      this.joyBase.setVisible(false);
+      this.joyThumb.setVisible(false);
+      return;
+    }
+    const isOffice = this.currentTheme === "office";
+    const hudPos = this.screenToHud(86, this.scale.height - 96);
+    this.joyBase
+      .setPosition(hudPos.x, hudPos.y)
+      .setScale(hudPos.invZoom)
+      .setFillStyle(isOffice ? 0x64748b : 0xffffff, 0.08)
+      .setStrokeStyle(2, isOffice ? 0x64748b : 0xffffff, 0.25)
+      .setVisible(true);
+    this.joyThumb
+      .setPosition(hudPos.x, hudPos.y)
+      .setScale(hudPos.invZoom)
+      .setFillStyle(isOffice ? 0x2563eb : 0xf05232, 0.45)
+      .setVisible(true);
+  }
+
+  private handleTriggerDash = () => {
+    if (this.isDead) return;
+    const now = Date.now();
+    if (now - this.lastDashTime < 2200) return;
+
+    this.lastDashTime = now;
+    this.dashEndTime = now + 180;
+    this.lastDamageTime = Math.max(this.lastDamageTime, now - 350);
+
+    let dirX = this.dragDx;
+    let dirY = this.dragDy;
+    const len = Math.hypot(dirX, dirY);
+    if (len > 0.1) {
+      dirX /= len;
+      dirY /= len;
+    } else {
+      dirX = Math.cos(this.playerRot);
+      dirY = Math.sin(this.playerRot);
+    }
+    this.dashVx = dirX * 640;
+    this.dashVy = dirY * 640;
+
+    EventBus.emit("dash-cooldown", { durationMs: 2200 });
+    this.createHitEffect(this.playerX, this.playerY, 0x38bdf8);
+  };
+
   create() {
+    this.input.addPointer(2);
+
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
       this.wasdKeys = this.input.keyboard.addKeys({
@@ -120,6 +190,8 @@ export class SoloGameScene extends Phaser.Scene {
         S: Phaser.Input.Keyboard.KeyCodes.S,
         D: Phaser.Input.Keyboard.KeyCodes.D,
       }) as any;
+      this.input.keyboard.on("keydown-SPACE", this.handleTriggerDash);
+      this.input.keyboard.on("keydown-SHIFT", this.handleTriggerDash);
     }
 
     this.drawBackground();
@@ -134,24 +206,29 @@ export class SoloGameScene extends Phaser.Scene {
       this.spawnEnemy();
     }
 
-    // Floating virtual joystick
+    // Floating virtual joystick (zoom-compensated screen-space)
     this.joyBase = this.add
-      .circle(0, 0, 44, 0xffffff, 0.14)
-      .setStrokeStyle(2, 0xffffff, 0.35)
+      .circle(0, 0, 48, 0xffffff, 0.14)
+      .setStrokeStyle(2.5, 0xffffff, 0.38)
       .setScrollFactor(0)
       .setDepth(100)
       .setVisible(false);
 
     this.joyThumb = this.add
-      .circle(0, 0, 18, 0xf05232, 0.78)
-      .setStrokeStyle(2, 0xffffff, 0.85)
+      .circle(0, 0, 20, 0xf05232, 0.85)
+      .setStrokeStyle(2.5, 0xffffff, 0.9)
       .setScrollFactor(0)
       .setDepth(101)
       .setVisible(false);
 
-    const maxJoyRadius = 48;
+    this.placeIdleJoystickGuide();
+
+    // Follow-thumb dynamic joystick (Brawl Stars / Survivor.io style)
+    const maxJoyRadius = 46;
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (this.activePointerId !== null) return;
       if (pointer.leftButtonDown() || pointer.wasTouch) {
+        this.activePointerId = pointer.id;
         this.isDragging = true;
         this.dragOriginX = pointer.x;
         this.dragOriginY = pointer.y;
@@ -160,60 +237,87 @@ export class SoloGameScene extends Phaser.Scene {
 
         if (this.joyBase && this.joyThumb) {
           const isOffice = this.currentTheme === "office";
+          const hudPos = this.screenToHud(pointer.x, pointer.y);
           this.joyBase
-            .setPosition(pointer.x, pointer.y)
-            .setFillStyle(isOffice ? 0x64748b : 0xffffff, isOffice ? 0.12 : 0.14)
-            .setStrokeStyle(2, isOffice ? 0x64748b : 0xffffff, 0.35)
+            .setPosition(hudPos.x, hudPos.y)
+            .setScale(hudPos.invZoom)
+            .setFillStyle(isOffice ? 0x64748b : 0xffffff, isOffice ? 0.14 : 0.16)
+            .setStrokeStyle(2.5, isOffice ? 0x64748b : 0xffffff, 0.45)
             .setVisible(true);
           this.joyThumb
-            .setPosition(pointer.x, pointer.y)
-            .setFillStyle(isOffice ? 0x2563eb : 0xf05232, 0.75)
+            .setPosition(hudPos.x, hudPos.y)
+            .setScale(hudPos.invZoom)
+            .setFillStyle(isOffice ? 0x2563eb : 0xf05232, 0.85)
             .setVisible(true);
         }
       }
     });
 
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (!this.isDragging) return;
+      if (!this.isDragging || pointer.id !== this.activePointerId) return;
       const rawDx = pointer.x - this.dragOriginX;
       const rawDy = pointer.y - this.dragOriginY;
-      const dist = Math.hypot(rawDx, rawDy);
+      let dist = Math.hypot(rawDx, rawDy);
 
-      if (dist > 6) {
-        const clamped = Math.min(dist, maxJoyRadius);
+      if (dist > 4) {
         const nx = rawDx / dist;
         const ny = rawDy / dist;
-        this.dragDx = nx * (clamped / maxJoyRadius);
-        this.dragDy = ny * (clamped / maxJoyRadius);
-        this.joyThumb?.setPosition(
-          this.dragOriginX + nx * clamped,
-          this.dragOriginY + ny * clamped
-        );
+
+        // Follow-thumb: slide base smoothly if thumb drags past rim -> instant 180° turnaround!
+        if (dist > maxJoyRadius) {
+          this.dragOriginX = pointer.x - nx * maxJoyRadius;
+          this.dragOriginY = pointer.y - ny * maxJoyRadius;
+          dist = maxJoyRadius;
+        }
+
+        // Snappy speed curve: reach 100% speed by 55% deflection
+        const magnitude = Math.min(1, (dist / maxJoyRadius) * 1.8);
+        this.dragDx = nx * magnitude;
+        this.dragDy = ny * magnitude;
+
+        if (this.joyBase && this.joyThumb) {
+          const baseHud = this.screenToHud(this.dragOriginX, this.dragOriginY);
+          const thumbHud = this.screenToHud(
+            this.dragOriginX + nx * dist,
+            this.dragOriginY + ny * dist
+          );
+          this.joyBase.setPosition(baseHud.x, baseHud.y).setScale(baseHud.invZoom);
+          this.joyThumb.setPosition(thumbHud.x, thumbHud.y).setScale(thumbHud.invZoom);
+        }
       } else {
         this.dragDx = 0;
         this.dragDy = 0;
-        this.joyThumb?.setPosition(this.dragOriginX, this.dragOriginY);
+        if (this.joyThumb) {
+          const baseHud = this.screenToHud(this.dragOriginX, this.dragOriginY);
+          this.joyThumb.setPosition(baseHud.x, baseHud.y).setScale(baseHud.invZoom);
+        }
       }
     });
 
-    const stopDrag = () => {
+    const stopDrag = (pointer: Phaser.Input.Pointer) => {
+      if (this.activePointerId !== null && pointer && pointer.id !== this.activePointerId) {
+        return;
+      }
+      this.activePointerId = null;
       this.isDragging = false;
       this.dragDx = 0;
       this.dragDy = 0;
-      this.joyBase?.setVisible(false);
-      this.joyThumb?.setVisible(false);
+      this.placeIdleJoystickGuide();
     };
 
     this.input.on("pointerup", stopDrag);
     this.input.on("pointerupoutside", stopDrag);
 
     EventBus.on("theme-changed", this.handleThemeChanged);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    EventBus.on("trigger-dash", this.handleTriggerDash);
+    const cleanup = () => {
       EventBus.off("theme-changed", this.handleThemeChanged);
-    });
-    this.events.once(Phaser.Scenes.Events.DESTROY, () => {
-      EventBus.off("theme-changed", this.handleThemeChanged);
-    });
+      EventBus.off("trigger-dash", this.handleTriggerDash);
+      this.input.keyboard?.off("keydown-SPACE", this.handleTriggerDash);
+      this.input.keyboard?.off("keydown-SHIFT", this.handleTriggerDash);
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+    this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
 
     this.emitHudStats();
   }
@@ -418,6 +522,9 @@ export class SoloGameScene extends Phaser.Scene {
     const w = this.scale.width;
     const zoom = w < 640 ? 0.68 : w < 1024 ? 0.82 : 1.0;
     this.cameras.main.setZoom(zoom);
+    if (!this.isDragging) {
+      this.placeIdleJoystickGuide();
+    }
   }
 
   private createPlayerVisual() {
@@ -709,6 +816,46 @@ export class SoloGameScene extends Phaser.Scene {
     });
   }
 
+  private createDeathBurst(x: number, y: number, color: number, count = 6) {
+    for (let i = 0; i < count; i++) {
+      const a = (Math.PI * 2 * i) / count + Math.random() * 0.4;
+      const dist = 22 + Math.random() * 24;
+      const p = this.add.circle(x, y, 4.5, color, 0.9);
+      p.setDepth(24);
+      this.tweens.add({
+        targets: p,
+        x: x + Math.cos(a) * dist,
+        y: y + Math.sin(a) * dist,
+        scale: 0.2,
+        alpha: 0,
+        duration: 240,
+        onComplete: () => p.destroy(),
+      });
+    }
+  }
+
+  private spawnFloatingText(x: number, y: number, label: string, color = "#fef08a") {
+    const t = this.add
+      .text(x, y - 10, label, {
+        fontFamily: "sans-serif",
+        fontSize: "13px",
+        fontStyle: "bold",
+        color,
+        stroke: "#0f172a",
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(40);
+    this.tweens.add({
+      targets: t,
+      y: y - 42,
+      alpha: 0,
+      duration: 550,
+      ease: "Cubic.easeOut",
+      onComplete: () => t.destroy(),
+    });
+  }
+
   private emitHudStats() {
     EventBus.emit("solo-stats-updated", {
       wave: this.wave,
@@ -801,10 +948,29 @@ export class SoloGameScene extends Phaser.Scene {
         }
       }
 
-      const pos = {
-        x: this.playerX + dx * this.playerSpeed * dt,
-        y: this.playerY + dy * this.playerSpeed * dt,
-      };
+      const isDashing = now < this.dashEndTime;
+      const pos = isDashing
+        ? {
+            x: this.playerX + this.dashVx * dt,
+            y: this.playerY + this.dashVy * dt,
+          }
+        : {
+            x: this.playerX + dx * this.playerSpeed * dt,
+            y: this.playerY + dy * this.playerSpeed * dt,
+          };
+
+      if (isDashing && Math.random() < 0.6) {
+        const ghost = this.add.circle(this.playerX, this.playerY, 16, 0x38bdf8, 0.32);
+        ghost.setDepth(16);
+        this.tweens.add({
+          targets: ghost,
+          scale: 0.4,
+          alpha: 0,
+          duration: 180,
+          onComplete: () => ghost.destroy(),
+        });
+      }
+
       this.resolveObstacleCollision(pos, 20);
       this.playerX = Math.max(25, Math.min(this.mapW - 25, pos.x));
       this.playerY = Math.max(25, Math.min(this.mapH - 25, pos.y));
@@ -830,15 +996,23 @@ export class SoloGameScene extends Phaser.Scene {
       this.playerContainer.setPosition(this.playerX, this.playerY);
       this.turretContainer.rotation = this.playerRot;
 
-      // Coin pickup
+      // Coin magnet + pickup (105px magnet pull for crisp mobile feel)
       for (let i = this.coins.length - 1; i >= 0; i--) {
         const c = this.coins[i];
-        if ((this.playerX - c.x) ** 2 + (this.playerY - c.y) ** 2 < 32 * 32) {
+        const cdx = this.playerX - c.x;
+        const cdy = this.playerY - c.y;
+        const cdSq = cdx * cdx + cdy * cdy;
+        if (cdSq < 34 * 34) {
           this.score += c.value;
           this.playerHp = Math.min(this.playerMaxHp, this.playerHp + 8);
           c.container.destroy();
           this.coins.splice(i, 1);
           if (this.coins.length < 18) this.spawnCoin();
+        } else if (cdSq < 105 * 105 && cdSq > 1) {
+          const d = Math.sqrt(cdSq);
+          c.x += (cdx / d) * 300 * dt;
+          c.y += (cdy / d) * 300 * dt;
+          c.container.setPosition(c.x, c.y);
         }
       }
     }
@@ -878,12 +1052,25 @@ export class SoloGameScene extends Phaser.Scene {
             this.createHitEffect(b.x, b.y, e.color);
             e.hpBarFill.width = e.radius * 2 * Math.max(0, e.hp / e.maxHp);
 
+            // Subtle knockback on hit for punchier combat feel
+            const kb = e.type === "boss" ? 2 : e.type === "tank" ? 4 : 9;
+            const bLen = Math.hypot(b.vx, b.vy) || 1;
+            e.x += (b.vx / bLen) * kb;
+            e.y += (b.vy / bLen) * kb;
+
             if (e.hp <= 0) {
               const baseReward =
                 e.type === "boss" ? 250 : e.type === "tank" ? 50 : e.type === "fast" ? 25 : 15;
               const reward = isHard ? Math.round(baseReward * 1.5) : baseReward;
               this.score += reward;
               this.kills += 1;
+              this.createDeathBurst(e.x, e.y, e.color, e.type === "boss" ? 14 : 6);
+              this.spawnFloatingText(
+                e.x,
+                e.y,
+                e.type === "boss" ? `👑 +${reward}` : `+${reward}`,
+                e.type === "boss" ? "#fbbf24" : "#fef08a"
+              );
 
               if (e.type === "boss") {
                 this.cameras.main.shake(180, 0.005);
@@ -925,7 +1112,8 @@ export class SoloGameScene extends Phaser.Scene {
         if (dSq < contactDist * contactDist && now - this.lastDamageTime > 600) {
           this.lastDamageTime = now;
           this.playerHp -= e.damage;
-          this.cameras.main.shake(90, 0.003);
+          this.cameras.main.shake(110, 0.004);
+          this.cameras.main.flash(140, 220, 38, 38, false);
           this.createHitEffect(this.playerX, this.playerY, 0xef4444);
 
           if (this.playerHp <= 0) {

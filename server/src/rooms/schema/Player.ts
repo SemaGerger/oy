@@ -21,6 +21,10 @@ export class Player extends Schema {
   isShooting: boolean = false;
   lastShootTime: number = 0;
   lastDamageTime: number = 0;
+  lastDashTime: number = 0;
+  dashEndTime: number = 0;
+  dashVx: number = 0;
+  dashVy: number = 0;
   lastChatTime: number = 0;
   lastModeToggleTime: number = 0;
   packetCount: number = 0;

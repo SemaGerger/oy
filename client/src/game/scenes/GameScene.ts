@@ -66,12 +66,14 @@ export class GameScene extends Phaser.Scene {
   };
 
   private isDragging = false;
+  private activePointerId: number | null = null;
   private dragOriginX = 0;
   private dragOriginY = 0;
   private dragDx = 0;
   private dragDy = 0;
   private joyBase: Phaser.GameObjects.Arc | null = null;
   private joyThumb: Phaser.GameObjects.Arc | null = null;
+  private lastDashTrigger = 0;
 
   constructor(room?: Room) {
     super("GameScene");
@@ -92,7 +94,57 @@ export class GameScene extends Phaser.Scene {
     this.rebuildObstacleVisuals();
   };
 
+  private screenToHud(sx: number, sy: number) {
+    const cam = this.cameras.main;
+    const zoom = cam.zoom || 1;
+    const cx = cam.width * 0.5;
+    const cy = cam.height * 0.5;
+    return {
+      x: cx + (sx - cx) / zoom,
+      y: cy + (sy - cy) / zoom,
+      invZoom: 1 / zoom,
+    };
+  }
+
+  private placeIdleJoystickGuide() {
+    if (!this.joyBase || !this.joyThumb) return;
+    const isTouchLayout = this.scale.width < 900;
+    if (!isTouchLayout) {
+      this.joyBase.setVisible(false);
+      this.joyThumb.setVisible(false);
+      return;
+    }
+    const isOffice = this.currentTheme === "office";
+    const hudPos = this.screenToHud(86, this.scale.height - 96);
+    this.joyBase
+      .setPosition(hudPos.x, hudPos.y)
+      .setScale(hudPos.invZoom)
+      .setFillStyle(isOffice ? 0x64748b : 0xffffff, 0.08)
+      .setStrokeStyle(2, isOffice ? 0x64748b : 0xffffff, 0.25)
+      .setVisible(true);
+    this.joyThumb
+      .setPosition(hudPos.x, hudPos.y)
+      .setScale(hudPos.invZoom)
+      .setFillStyle(isOffice ? 0x2563eb : 0xf05232, 0.45)
+      .setVisible(true);
+  }
+
+  private handleTriggerDash = () => {
+    if (!this.room) return;
+    const now = Date.now();
+    if (now - this.lastDashTrigger < 2200) return;
+    this.lastDashTrigger = now;
+    this.room.send("dash");
+    EventBus.emit("dash-cooldown", { durationMs: 2200 });
+    const localVis = this.playerVisuals.get(this.room.sessionId);
+    if (localVis) {
+      this.createHitEffect(localVis.container.x, localVis.container.y, 0x38bdf8);
+    }
+  };
+
   create() {
+    this.input.addPointer(2);
+
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
       this.wasdKeys = this.input.keyboard.addKeys({
@@ -102,27 +154,31 @@ export class GameScene extends Phaser.Scene {
         D: Phaser.Input.Keyboard.KeyCodes.D,
         SPACE: Phaser.Input.Keyboard.KeyCodes.SPACE,
       }) as any;
+      this.input.keyboard.on("keydown-SPACE", this.handleTriggerDash);
+      this.input.keyboard.on("keydown-SHIFT", this.handleTriggerDash);
     }
 
-    // Floating virtual joystick visual (fixed to screen via scrollFactor 0)
+    // Floating virtual joystick visual (zoom-compensated screen-space)
     this.joyBase = this.add
-      .circle(0, 0, 44, 0xffffff, 0.14)
-      .setStrokeStyle(2, 0xffffff, 0.35)
+      .circle(0, 0, 48, 0xffffff, 0.14)
+      .setStrokeStyle(2.5, 0xffffff, 0.38)
       .setScrollFactor(0)
       .setDepth(100)
       .setVisible(false);
 
     this.joyThumb = this.add
-      .circle(0, 0, 18, 0xf05232, 0.78)
-      .setStrokeStyle(2, 0xffffff, 0.85)
+      .circle(0, 0, 20, 0xf05232, 0.85)
+      .setStrokeStyle(2.5, 0xffffff, 0.9)
       .setScrollFactor(0)
       .setDepth(101)
       .setVisible(false);
 
-    // Drag-to-move (Mouse or Touch) — character auto-aims & auto-shoots!
-    const maxJoyRadius = 48;
+    // Follow-thumb dynamic joystick (Brawl Stars / Survivor.io style)
+    const maxJoyRadius = 46;
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (this.activePointerId !== null) return;
       if (pointer.leftButtonDown() || pointer.wasTouch) {
+        this.activePointerId = pointer.id;
         this.isDragging = true;
         this.dragOriginX = pointer.x;
         this.dragOriginY = pointer.y;
@@ -131,53 +187,72 @@ export class GameScene extends Phaser.Scene {
 
         if (this.joyBase && this.joyThumb) {
           const isOffice = this.currentTheme === "office";
+          const hudPos = this.screenToHud(pointer.x, pointer.y);
           this.joyBase
-            .setPosition(pointer.x, pointer.y)
-            .setFillStyle(isOffice ? 0x64748b : 0xffffff, isOffice ? 0.12 : 0.14)
-            .setStrokeStyle(2, isOffice ? 0x64748b : 0xffffff, 0.35)
+            .setPosition(hudPos.x, hudPos.y)
+            .setScale(hudPos.invZoom)
+            .setFillStyle(isOffice ? 0x64748b : 0xffffff, isOffice ? 0.14 : 0.16)
+            .setStrokeStyle(2.5, isOffice ? 0x64748b : 0xffffff, 0.45)
             .setVisible(true);
           this.joyThumb
-            .setPosition(pointer.x, pointer.y)
-            .setFillStyle(isOffice ? 0x2563eb : 0xf05232, 0.75)
+            .setPosition(hudPos.x, hudPos.y)
+            .setScale(hudPos.invZoom)
+            .setFillStyle(isOffice ? 0x2563eb : 0xf05232, 0.85)
             .setVisible(true);
         }
       }
     });
 
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (!this.isDragging) return;
-      const rawDx = pointer.x - this.dragOriginX;
-      const rawDy = pointer.y - this.dragOriginY;
-      const dist = Math.hypot(rawDx, rawDy);
+      if (!this.isDragging || pointer.id !== this.activePointerId) return;
+      let rawDx = pointer.x - this.dragOriginX;
+      let rawDy = pointer.y - this.dragOriginY;
+      let dist = Math.hypot(rawDx, rawDy);
 
-      if (dist > 6) {
-        const clamped = Math.min(dist, maxJoyRadius);
+      if (dist > 4) {
         const nx = rawDx / dist;
         const ny = rawDy / dist;
-        this.dragDx = nx * (clamped / maxJoyRadius);
-        this.dragDy = ny * (clamped / maxJoyRadius);
 
-        if (this.joyThumb) {
-          this.joyThumb.setPosition(
-            this.dragOriginX + nx * clamped,
-            this.dragOriginY + ny * clamped
+        // Follow-thumb: slide base smoothly if thumb drags past rim -> instant 180° turnaround!
+        if (dist > maxJoyRadius) {
+          this.dragOriginX = pointer.x - nx * maxJoyRadius;
+          this.dragOriginY = pointer.y - ny * maxJoyRadius;
+          dist = maxJoyRadius;
+        }
+
+        // Snappy response curve: reach 100% speed by 55% deflection
+        const magnitude = Math.min(1, (dist / maxJoyRadius) * 1.8);
+        this.dragDx = nx * magnitude;
+        this.dragDy = ny * magnitude;
+
+        if (this.joyBase && this.joyThumb) {
+          const baseHud = this.screenToHud(this.dragOriginX, this.dragOriginY);
+          const thumbHud = this.screenToHud(
+            this.dragOriginX + nx * dist,
+            this.dragOriginY + ny * dist
           );
+          this.joyBase.setPosition(baseHud.x, baseHud.y).setScale(baseHud.invZoom);
+          this.joyThumb.setPosition(thumbHud.x, thumbHud.y).setScale(thumbHud.invZoom);
         }
       } else {
         this.dragDx = 0;
         this.dragDy = 0;
         if (this.joyThumb) {
-          this.joyThumb.setPosition(this.dragOriginX, this.dragOriginY);
+          const baseHud = this.screenToHud(this.dragOriginX, this.dragOriginY);
+          this.joyThumb.setPosition(baseHud.x, baseHud.y).setScale(baseHud.invZoom);
         }
       }
     });
 
-    const stopDrag = () => {
+    const stopDrag = (pointer: Phaser.Input.Pointer) => {
+      if (this.activePointerId !== null && pointer && pointer.id !== this.activePointerId) {
+        return;
+      }
+      this.activePointerId = null;
       this.isDragging = false;
       this.dragDx = 0;
       this.dragDy = 0;
-      this.joyBase?.setVisible(false);
-      this.joyThumb?.setVisible(false);
+      this.placeIdleJoystickGuide();
     };
 
     this.input.on("pointerup", stopDrag);
@@ -193,17 +268,23 @@ export class GameScene extends Phaser.Scene {
       const w = this.scale.width;
       const zoom = w < 640 ? 0.68 : w < 1024 ? 0.82 : 1.0;
       this.cameras.main.setZoom(zoom);
+      if (!this.isDragging) {
+        this.placeIdleJoystickGuide();
+      }
     };
     applyResponsiveZoom();
     this.scale.on("resize", applyResponsiveZoom);
 
     EventBus.on("theme-changed", this.handleThemeChanged);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    EventBus.on("trigger-dash", this.handleTriggerDash);
+    const cleanup = () => {
       EventBus.off("theme-changed", this.handleThemeChanged);
-    });
-    this.events.once(Phaser.Scenes.Events.DESTROY, () => {
-      EventBus.off("theme-changed", this.handleThemeChanged);
-    });
+      EventBus.off("trigger-dash", this.handleTriggerDash);
+      this.input.keyboard?.off("keydown-SPACE", this.handleTriggerDash);
+      this.input.keyboard?.off("keydown-SHIFT", this.handleTriggerDash);
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+    this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
 
     this.setupRoomListeners();
 

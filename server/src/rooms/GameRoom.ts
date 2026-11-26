@@ -194,6 +194,32 @@ export class GameRoom extends Room<GameState> {
       });
     });
 
+    // 5. Server-authoritative Dash / Dodge skill (2.2s cooldown)
+    this.onMessage("dash", (client: Client) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || player.isDead || !this.isPacketAllowed(client, player)) return;
+
+      const now = Date.now();
+      if (now - player.lastDashTime < 2200) return;
+
+      player.lastDashTime = now;
+      player.dashEndTime = now + 180;
+      player.lastDamageTime = Math.max(player.lastDamageTime, now - 350); // brief dash grace
+
+      let dirX = player.vx;
+      let dirY = player.vy;
+      const len = Math.hypot(dirX, dirY);
+      if (len > 10) {
+        dirX /= len;
+        dirY /= len;
+      } else {
+        dirX = Math.cos(player.rotation);
+        dirY = Math.sin(player.rotation);
+      }
+      player.dashVx = dirX * 640;
+      player.dashVy = dirY * 640;
+    });
+
     // 50 FPS simulation loop
     this.setSimulationInterval((deltaTime) => this.update(deltaTime), 1000 / 50);
   }
@@ -615,8 +641,13 @@ export class GameRoom extends Room<GameState> {
 
       livingPlayers.push(player);
 
-      player.x += player.vx * dt;
-      player.y += player.vy * dt;
+      if (now < player.dashEndTime) {
+        player.x += player.dashVx * dt;
+        player.y += player.dashVy * dt;
+      } else {
+        player.x += player.vx * dt;
+        player.y += player.vy * dt;
+      }
 
       // Resolve collisions with arena obstacles
       this.resolveObstacleCollision(player, 20);
@@ -630,13 +661,19 @@ export class GameRoom extends Room<GameState> {
       this.state.coins.forEach((coin, coinId) => {
         const dx = player.x - coin.x;
         const dy = player.y - coin.y;
-        if (dx * dx + dy * dy < 32 * 32) {
+        const dSq = dx * dx + dy * dy;
+        if (dSq < 34 * 34) {
           player.score += coin.value;
           player.hp = Math.min(player.maxHp, player.hp + 8);
           this.state.coins.delete(coinId);
           if (this.state.coins.size < 20) {
             this.spawnCoin();
           }
+        } else if (dSq < 105 * 105 && dSq > 1) {
+          // Smooth coin magnet pull for better mobile feel
+          const d = Math.sqrt(dSq);
+          coin.x += (dx / d) * 280 * dt;
+          coin.y += (dy / d) * 280 * dt;
         }
       });
     });

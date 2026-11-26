@@ -80,6 +80,8 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [showChat, setShowChat] = useState(() => window.innerWidth >= 768);
   const [copied, setCopied] = useState(false);
+  const [dashReadyAt, setDashReadyAt] = useState(0);
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -95,9 +97,14 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
     const handleGameInfoUpdate = (info: GameInfo) => {
       setGameInfo(info);
     };
+    const handleDashCooldown = (payload: { durationMs: number }) => {
+      setDashReadyAt(Date.now() + (payload?.durationMs || 2200));
+      setNowTick(Date.now());
+    };
 
     EventBus.on("players-updated", handlePlayersUpdate);
     EventBus.on("game-info-updated", handleGameInfoUpdate);
+    EventBus.on("dash-cooldown", handleDashCooldown);
 
     room.onMessage("chat", (msg: ChatMessage) => {
       setMessages((prev) => [...prev.slice(-40), msg]);
@@ -124,8 +131,21 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
     return () => {
       EventBus.off("players-updated", handlePlayersUpdate);
       EventBus.off("game-info-updated", handleGameInfoUpdate);
+      EventBus.off("dash-cooldown", handleDashCooldown);
     };
   }, [room]);
+
+  useEffect(() => {
+    if (dashReadyAt <= Date.now()) return;
+    const id = window.setInterval(() => {
+      const t = Date.now();
+      setNowTick(t);
+      if (t >= dashReadyAt) {
+        window.clearInterval(id);
+      }
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [dashReadyAt]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -540,10 +560,69 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
               <kbd style={styles.kbd}>Otomatik</kbd> : En yakın düşmana ateş eder
             </div>
             <div style={{ marginTop: "3px" }}>
+              <kbd style={styles.kbd}>Space</kbd> : Hızlı Kaçış (Atıl)
+            </div>
+            <div style={{ marginTop: "3px" }}>
               <kbd style={styles.kbd}>Shift + O</kbd> : Açık / Eğlence Modu
             </div>
           </div>
         </div>
+      )}
+
+      {/* Bottom-Right Thumb Dash / Dodge Button */}
+      {!localPlayer?.isDead && (
+        <button
+          type="button"
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            EventBus.emit("trigger-dash");
+          }}
+          style={{
+            position: "absolute",
+            right: isMobile ? "22px" : "24px",
+            bottom: isMobile ? "28px" : "116px",
+            width: isMobile ? "72px" : "62px",
+            height: isMobile ? "72px" : "62px",
+            borderRadius: "50%",
+            pointerEvents: "auto",
+            border:
+              dashReadyAt - nowTick <= 50
+                ? isOffice
+                  ? "2.5px solid #2563eb"
+                  : "2.5px solid #38bdf8"
+                : "2px solid rgba(148, 163, 184, 0.45)",
+            backgroundColor:
+              dashReadyAt - nowTick <= 50
+                ? isOffice
+                  ? "rgba(37, 99, 235, 0.92)"
+                  : "rgba(14, 165, 233, 0.86)"
+                : "rgba(30, 41, 59, 0.72)",
+            color: "#ffffff",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "2px",
+            cursor: dashReadyAt - nowTick <= 50 ? "pointer" : "default",
+            boxShadow:
+              dashReadyAt - nowTick <= 50
+                ? "0 8px 22px rgba(14, 165, 233, 0.38)"
+                : "0 4px 12px rgba(0, 0, 0, 0.25)",
+            fontFamily: "inherit",
+            touchAction: "none",
+            zIndex: 40,
+          }}
+          title="Hızlı Kaçış / Atıl (Space veya Shift)"
+        >
+          <span style={{ fontSize: "19px", lineHeight: 1 }}>
+            {dashReadyAt - nowTick <= 50 ? "💨" : "⏳"}
+          </span>
+          <span style={{ fontSize: "10px", fontWeight: 900, letterSpacing: "0.04em" }}>
+            {dashReadyAt - nowTick <= 50
+              ? "ATIL"
+              : `${Math.max(0, (dashReadyAt - nowTick) / 1000).toFixed(1)}s`}
+          </span>
+        </button>
       )}
 
       {/* Chat Box (Bottom Left) */}
