@@ -1,0 +1,17 @@
+{
+  "name": "Sitecont Game — Çok Oyunculu Tarayıcı Oyunları",
+  "short_name": "Sitecont Game",
+  "description": "İndirmeden, ücretsiz tek kişilik ve arkadaşlarla çok oyunculu (Co-op & PvP) 2D hayatta kalma arena oyunları.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#16171a",
+  "theme_color": "#f05232",
+  "lang": "tr",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

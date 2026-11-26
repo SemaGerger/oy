@@ -592,6 +592,136 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
             ))}
           </div>
         </section>
+
+        {/* Semantic SEO Guide & FAQ Section (Helps players discover Sitecont Game on Google) */}
+        <section
+          aria-label="Oyun Hakkında ve Sıkça Sorulan Sorular"
+          style={{
+            marginTop: "28px",
+            padding: "22px 24px",
+            borderRadius: "18px",
+            backgroundColor: isOffice ? "#ffffff" : "#1e1f24",
+            border: isOffice ? "1px solid #cbd5e1" : "1px solid #2e3038",
+            color: isOffice ? "#334155" : "#a1a1aa",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+          }}
+        >
+          <div>
+            <h2
+              style={{
+                margin: "0 0 8px 0",
+                fontSize: "17px",
+                fontWeight: 800,
+                color: isOffice ? "#0f172a" : "#fafaf9",
+              }}
+            >
+              İndirmeden Ücretsiz Çok Oyunculu &amp; Tek Kişilik Tarayıcı Oyunları
+            </h2>
+            <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.65 }}>
+              <b>Sitecont Game</b>, telefon, tablet ve bilgisayardan hiçbir kurulum yapmadan anında
+              oynayabileceğiniz ücretsiz <b>online arena ve hayatta kalma oyunları</b> sunar.{" "}
+              <b>Survival Arena 2D</b> ile ister tek başınıza giriş yapmadan dalgalara karşı hayatta
+              kalın, ister arkadaşlarınızla özel oda kurup <b>Co-op (işbirliği)</b> veya{" "}
+              <b>PvP (serbest savaş)</b> modunda <b>Dev Boss</b> savaşlarına katılın.
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: "12px",
+            }}
+          >
+            <article
+              style={{
+                padding: "14px",
+                borderRadius: "12px",
+                backgroundColor: isOffice ? "#f8fafc" : "#16171a",
+                border: isOffice ? "1px solid #e2e8f0" : "1px solid #27272a",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 6px 0",
+                  fontSize: "13px",
+                  fontWeight: 800,
+                  color: isOffice ? "#0f172a" : "#ffffff",
+                }}
+              >
+                Arkadaşlarla Online Oda Kurma
+              </h3>
+              <p style={{ margin: 0, fontSize: "12px", lineHeight: 1.55 }}>
+                Çok oyunculu modda tek tıkla <b>Özel Oda</b> oluşturup davet linkini paylaşın.
+                Arkadaşlarınızla aynı arenada canlı sohbet ederek Dev Boss’ları birlikte devirin.
+              </p>
+            </article>
+
+            <article
+              style={{
+                padding: "14px",
+                borderRadius: "12px",
+                backgroundColor: isOffice ? "#f8fafc" : "#16171a",
+                border: isOffice ? "1px solid #e2e8f0" : "1px solid #27272a",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 6px 0",
+                  fontSize: "13px",
+                  fontWeight: 800,
+                  color: isOffice ? "#0f172a" : "#ffffff",
+                }}
+              >
+                Orta &amp; Zor Dalgalar + Dev Boss’lar
+              </h3>
+              <p style={{ margin: 0, fontSize: "12px", lineHeight: 1.55 }}>
+                Her 25 saniyede düşmanlar güçlenir; Orta modda her 3. dalgada, Zor modda (1.5x Skor)
+                her 2. dalgada minyon çağıran <b>Dev Boss</b> arenaya iner.
+              </p>
+            </article>
+
+            <article
+              style={{
+                padding: "14px",
+                borderRadius: "12px",
+                backgroundColor: isOffice ? "#f8fafc" : "#16171a",
+                border: isOffice ? "1px solid #e2e8f0" : "1px solid #27272a",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 6px 0",
+                  fontSize: "13px",
+                  fontWeight: 800,
+                  color: isOffice ? "#0f172a" : "#ffffff",
+                }}
+              >
+                Mobil &amp; Bilgisayar Uyumlu Kontroller
+              </h3>
+              <p style={{ margin: 0, fontSize: "12px", lineHeight: 1.55 }}>
+                Mobilde takip eden sanal joystick, otomatik ateş ve <b>Atıl (Dash)</b> kaçış
+                butonuyla akıcı oynanış; bilgisayarda <b>W A S D</b>, sürükleme ve <b>Space</b>{" "}
+                desteği.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <footer
+          style={{
+            marginTop: "18px",
+            paddingBottom: "24px",
+            textAlign: "center",
+            fontSize: "12px",
+            color: isOffice ? "#64748b" : "#71717a",
+          }}
+        >
+          © {new Date().getFullYear()} Sitecont Game — Ücretsiz Çok Oyunculu &amp; Tek Kişilik
+          Tarayıcı Oyunları (game.sitecont.io)
+        </footer>
       </main>
     </div>
   );

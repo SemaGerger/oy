@@ -749,6 +749,7 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
           ))}
         </div>
       </div>
+      )}
 
       {/* Controls Hint (Desktop Only — hidden on mobile to keep touch area clear) */}
       {!isMobile && (
@@ -851,8 +852,10 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
         </button>
       )}
 
-      {/* Chat Box (Bottom Left) */}
+      {/* Chat Box (Desktop: always visible bottom-left; Mobile: only when opened from ☰ menu) */}
+      {(!isMobile || showChat) && (
       <div
+        onPointerDown={(e) => e.stopPropagation()}
         style={{
           ...styles.chatContainer,
           backgroundColor: panelBg,
@@ -946,6 +949,7 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
           </>
         )}
       </div>
+      )}
     </div>
   );
 };
