@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Flame, Heart, Skull, Sun, Moon, Trophy, Users } from "lucide-react";
+import { Flame, Heart, Skull, Sun, Moon, Trophy, Users, Menu, X } from "lucide-react";
 import { EventBus } from "../game/EventBus";
 import { useTheme } from "../theme/ThemeContext";
 
@@ -29,6 +29,7 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
 }) => {
   const { isOffice, toggleTheme } = useTheme();
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dashReadyAt, setDashReadyAt] = useState(0);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [stats, setStats] = useState<SoloStats>({
@@ -99,7 +100,7 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
     return () => window.clearInterval(id);
   }, [dashReadyAt]);
 
-  const panelBg = isOffice ? "#ffffff" : "rgba(28, 25, 23, 0.92)";
+  const panelBg = isOffice ? "#ffffff" : "rgba(28, 25, 23, 0.88)";
   const panelBorder = isOffice ? "1px solid #cbd5e1" : "1px solid #44403c";
   const panelText = isOffice ? "#0f172a" : "#fafaf9";
   const isHard = stats.difficulty === "hard";
@@ -112,15 +113,15 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
         <div
           style={{
             position: "absolute",
-            top: isMobile ? "52px" : "62px",
+            top: isMobile ? "48px" : "62px",
             left: "50%",
             transform: "translateX(-50%)",
             backgroundColor: isOffice ? "#fef2f2" : "rgba(159, 18, 57, 0.94)",
             border: isOffice ? "1.5px solid #dc2626" : "2px solid #fbbf24",
             color: isOffice ? "#b91c1c" : "#fef3c7",
             borderRadius: "999px",
-            padding: "5px 16px",
-            fontSize: isMobile ? "11px" : "12px",
+            padding: "4px 14px",
+            fontSize: isMobile ? "10px" : "12px",
             fontWeight: 900,
             letterSpacing: "0.06em",
             boxShadow: isOffice
@@ -130,7 +131,7 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
             whiteSpace: "nowrap",
           }}
         >
-          {isOffice ? "⚠ YÜKSEK ÖNCELİKLİ SÜREÇ AKTİF" : "👑 DEV BOSS GELDİ! DİKKAT ET!"}
+          {isOffice ? "⚠ YÜKSEK ÖNCELİKLİ SÜREÇ AKTİF" : "👑 DEV BOSS GELDİ!"}
         </div>
       )}
 
@@ -152,81 +153,157 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
         </div>
       )}
 
-      <div style={styles.topBar}>
-        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "5px" : "8px", flexWrap: "wrap" }}>
-          <button
-            onClick={onBackToPortal}
-            style={{
-              ...styles.portalBtn,
-              padding: isMobile ? "6px 9px" : "7px 13px",
-              fontSize: isMobile ? "11px" : "12px",
-              backgroundColor: isOffice ? "#2563eb" : "#f05232",
-              borderBottom: isOffice ? "2px solid #1d4ed8" : "3px solid #c93b1e",
-            }}
-          >
-            {isMobile ? "Ana Sayfa" : isOffice ? "Workspace" : "SITECONT GAME"}
-          </button>
-
-          <button
-            onClick={toggleTheme}
-            style={{
-              ...styles.chipBtn,
-              padding: isMobile ? "6px 8px" : "7px 11px",
-              backgroundColor: panelBg,
-              border: panelBorder,
-              color: panelText,
-            }}
-            title={isOffice ? "Eğlence Modu" : "Açık Mod"}
-          >
-            {isOffice ? <Moon size={14} color="#2563eb" /> : <Sun size={14} color="#fbbf24" />}
-            {!isMobile && <span>{isOffice ? "Eğlence Modu" : "Açık Mod"}</span>}
-          </button>
-
+      {isMobile ? (
+        /* ULTRA-CLEAN MOBILE TOP STRIP (Zero clutter!) */
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
           <div
             style={{
               ...styles.badge,
-              padding: isMobile ? "5px 9px" : "7px 12px",
-              fontSize: isMobile ? "11px" : "12px",
+              padding: "5px 9px",
+              fontSize: "11px",
               backgroundColor: panelBg,
               border: panelBorder,
               color: panelText,
             }}
           >
-            {!isOffice && !isMobile && <Flame size={15} color="#f97316" />}
             <span style={{ fontWeight: 800, color: isOffice ? "#2563eb" : "#fbbf24" }}>
-              {isOffice ? `Aşama ${stats.wave}` : `D${stats.wave}`}
+              D{stats.wave}
             </span>
             <span
               style={{
-                fontSize: "10px",
+                fontSize: "9px",
                 fontWeight: 800,
-                padding: "1px 5px",
-                borderRadius: "5px",
-                backgroundColor: isHard
-                  ? isOffice
-                    ? "#fee2e2"
-                    : "rgba(220,38,38,0.28)"
-                  : isOffice
-                    ? "#fef3c7"
-                    : "rgba(245,158,11,0.22)",
-                color: isHard
-                  ? isOffice
-                    ? "#b91c1c"
-                    : "#fca5a5"
-                  : isOffice
-                    ? "#b45309"
-                    : "#fcd34d",
+                padding: "1px 4px",
+                borderRadius: "4px",
+                backgroundColor: isHard ? "rgba(220,38,38,0.28)" : "rgba(245,158,11,0.22)",
+                color: isHard ? "#fca5a5" : "#fcd34d",
               }}
             >
               {isHard ? "ZOR" : "ORTA"}
             </span>
-            <span style={{ color: "#64748b" }}>•</span>
-            <span style={{ fontSize: "11px", color: isOffice ? "#475569" : "#f87171", fontWeight: 600 }}>
-              {stats.enemyCount}
-            </span>
           </div>
 
-          {!isMobile && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div
+              style={{
+                ...styles.statsBox,
+                padding: "5px 9px",
+                gap: "7px",
+                backgroundColor: panelBg,
+                border: panelBorder,
+                color: panelText,
+              }}
+            >
+              <Heart size={12} color="#ef4444" fill="#ef4444" />
+              <div style={{ ...styles.hpOuter, width: "44px" }}>
+                <div
+                  style={{
+                    ...styles.hpInner,
+                    width: `${Math.max(0, Math.min(100, (stats.hp / stats.maxHp) * 100))}%`,
+                    backgroundColor:
+                      stats.hp > 50 ? "#22c55e" : stats.hp > 25 ? "#eab308" : "#ef4444",
+                  }}
+                />
+              </div>
+              <span style={{ fontWeight: 800, fontSize: "11px", color: isOffice ? "#0f172a" : "#fbbf24" }}>
+                ⭐ {stats.score}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              style={{
+                ...styles.chipBtn,
+                padding: "6px 8px",
+                backgroundColor: panelBg,
+                border: panelBorder,
+                color: panelText,
+              }}
+              aria-label="Menü"
+            >
+              {mobileMenuOpen ? <X size={16} /> : <Menu size={16} />}
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* DESKTOP FULL TOP BAR */
+        <div style={styles.topBar}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <button
+              onClick={onBackToPortal}
+              style={{
+                ...styles.portalBtn,
+                backgroundColor: isOffice ? "#2563eb" : "#f05232",
+                borderBottom: isOffice ? "2px solid #1d4ed8" : "3px solid #c93b1e",
+              }}
+            >
+              {isOffice ? "Workspace" : "SITECONT GAME"}
+            </button>
+
+            <button
+              onClick={toggleTheme}
+              style={{
+                ...styles.chipBtn,
+                backgroundColor: panelBg,
+                border: panelBorder,
+                color: panelText,
+              }}
+            >
+              {isOffice ? <Moon size={14} color="#2563eb" /> : <Sun size={14} color="#fbbf24" />}
+              <span>{isOffice ? "Eğlence Modu" : "Açık Mod"}</span>
+            </button>
+
+            <div
+              style={{
+                ...styles.badge,
+                backgroundColor: panelBg,
+                border: panelBorder,
+                color: panelText,
+              }}
+            >
+              {!isOffice && <Flame size={15} color="#f97316" />}
+              <span style={{ fontWeight: 800, color: isOffice ? "#2563eb" : "#fbbf24" }}>
+                {isOffice ? `Aşama ${stats.wave}` : `DALGA ${stats.wave}`}
+              </span>
+              <span
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 800,
+                  padding: "2px 6px",
+                  borderRadius: "6px",
+                  backgroundColor: isHard
+                    ? isOffice
+                      ? "#fee2e2"
+                      : "rgba(220,38,38,0.28)"
+                    : isOffice
+                      ? "#fef3c7"
+                      : "rgba(245,158,11,0.22)",
+                  color: isHard
+                    ? isOffice
+                      ? "#b91c1c"
+                      : "#fca5a5"
+                    : isOffice
+                      ? "#b45309"
+                      : "#fcd34d",
+                }}
+              >
+                {isHard ? "ZOR" : "ORTA"}
+              </span>
+              <span style={{ color: "#64748b" }}>•</span>
+              <span style={{ fontSize: "12px", color: isOffice ? "#475569" : "#f87171", fontWeight: 600 }}>
+                {isOffice ? `${stats.enemyCount} Kayıt` : `${stats.enemyCount} Düşman`}
+              </span>
+            </div>
+
             <button
               onClick={onSwitchToMultiplayer}
               style={{
@@ -240,42 +317,37 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
               <Users size={14} />
               <span>Çok Oyunculu</span>
             </button>
-          )}
-        </div>
-
-        {/* Right: HP, Score & Best Score */}
-        <div
-          style={{
-            ...styles.statsBox,
-            padding: isMobile ? "5px 9px" : "7px 12px",
-            gap: isMobile ? "7px" : "10px",
-            backgroundColor: panelBg,
-            border: panelBorder,
-            color: panelText,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-            <Heart size={13} color="#ef4444" fill="#ef4444" />
-            <div style={{ ...styles.hpOuter, width: isMobile ? "46px" : "64px" }}>
-              <div
-                style={{
-                  ...styles.hpInner,
-                  width: `${Math.max(0, Math.min(100, (stats.hp / stats.maxHp) * 100))}%`,
-                  backgroundColor:
-                    stats.hp > 50 ? "#22c55e" : stats.hp > 25 ? "#eab308" : "#ef4444",
-                }}
-              />
-            </div>
-            {!isMobile && <span style={{ fontSize: "11px", fontWeight: 700 }}>{stats.hp}</span>}
           </div>
 
-          <span style={{ fontWeight: 700, fontSize: "12px", color: isOffice ? "#475569" : "#f87171" }}>
-            {isOffice ? `${stats.kills}` : `💀 ${stats.kills}`}
-          </span>
-          <span style={{ fontWeight: 800, fontSize: "12px", color: isOffice ? "#0f172a" : "#fbbf24" }}>
-            {isOffice ? `${stats.score}p` : `⭐ ${stats.score}`}
-          </span>
-          {!isMobile && (
+          <div
+            style={{
+              ...styles.statsBox,
+              backgroundColor: panelBg,
+              border: panelBorder,
+              color: panelText,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <Heart size={13} color="#ef4444" fill="#ef4444" />
+              <div style={styles.hpOuter}>
+                <div
+                  style={{
+                    ...styles.hpInner,
+                    width: `${Math.max(0, Math.min(100, (stats.hp / stats.maxHp) * 100))}%`,
+                    backgroundColor:
+                      stats.hp > 50 ? "#22c55e" : stats.hp > 25 ? "#eab308" : "#ef4444",
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: "11px", fontWeight: 700 }}>{stats.hp}</span>
+            </div>
+
+            <span style={{ fontWeight: 700, color: isOffice ? "#475569" : "#f87171" }}>
+              {isOffice ? `${stats.kills} işlem` : `💀 ${stats.kills}`}
+            </span>
+            <span style={{ fontWeight: 800, color: isOffice ? "#0f172a" : "#fbbf24" }}>
+              {isOffice ? `${stats.score}p` : `⭐ ${stats.score}`}
+            </span>
             <span
               style={{
                 display: "flex",
@@ -288,9 +360,86 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
             >
               <Trophy size={12} color="#f59e0b" /> {bestScore}
             </span>
-          )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Mobile Collapsible Menu Drawer */}
+      {isMobile && mobileMenuOpen && (
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            position: "absolute",
+            top: "48px",
+            right: "12px",
+            width: "210px",
+            backgroundColor: isOffice ? "#ffffff" : "rgba(24, 24, 27, 0.96)",
+            border: panelBorder,
+            borderRadius: "14px",
+            padding: "10px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            pointerEvents: "auto",
+            zIndex: 60,
+            boxShadow: "0 12px 28px rgba(0,0,0,0.35)",
+          }}
+        >
+          <div style={{ fontSize: "11px", color: "#9ca3af", display: "flex", justifyContent: "space-between", padding: "2px 4px" }}>
+            <span>💀 {stats.kills} Öldürme</span>
+            <span>🏆 Rekor: {bestScore}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              toggleTheme();
+              setMobileMenuOpen(false);
+            }}
+            style={{
+              ...styles.chipBtn,
+              justifyContent: "flex-start",
+              backgroundColor: panelBg,
+              border: panelBorder,
+              color: panelText,
+            }}
+          >
+            {isOffice ? <Moon size={14} color="#2563eb" /> : <Sun size={14} color="#fbbf24" />}
+            <span>{isOffice ? "Eğlence Modu" : "Açık Mod"}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              onSwitchToMultiplayer();
+            }}
+            style={{
+              ...styles.chipBtn,
+              justifyContent: "flex-start",
+              backgroundColor: panelBg,
+              border: panelBorder,
+              color: isOffice ? "#2563eb" : "#4ade80",
+            }}
+          >
+            <Users size={14} />
+            <span>Çok Oyunculu Mod</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              onBackToPortal();
+            }}
+            style={{
+              ...styles.portalBtn,
+              textAlign: "center",
+              backgroundColor: isOffice ? "#2563eb" : "#f05232",
+              borderBottom: isOffice ? "2px solid #1d4ed8" : "3px solid #c93b1e",
+            }}
+          >
+            Ana Sayfaya Dön
+          </button>
+        </div>
+      )}
 
       {/* Bottom-Right Thumb Dash / Dodge Button */}
       {!stats.isDead && (

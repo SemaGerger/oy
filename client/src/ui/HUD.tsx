@@ -15,6 +15,8 @@ import {
   Flame,
   Sun,
   Moon,
+  Menu,
+  X,
 } from "lucide-react";
 import { EventBus } from "../game/EventBus";
 import { useTheme } from "../theme/ThemeContext";
@@ -78,6 +80,7 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
   const [killFeed, setKillFeed] = useState<KillFeedItem[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showChat, setShowChat] = useState(() => window.innerWidth >= 768);
   const [copied, setCopied] = useState(false);
   const [dashReadyAt, setDashReadyAt] = useState(0);
@@ -230,198 +233,420 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
       )}
 
       {/* Top Bar */}
-      <div style={styles.topBar}>
-        {/* Left Controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-          {onBackToPortal && (
-            <button
-              onClick={onBackToPortal}
-              style={{
-                ...styles.portalHomeBtn,
-                backgroundColor: isOffice ? "#2563eb" : "#f05232",
-                borderBottom: isOffice ? "2px solid #1d4ed8" : "3px solid #c93b1e",
-              }}
-              title="Ana sayfaya dön"
-            >
-              {isOffice ? "Workspace" : "SITECONT GAME"}
-            </button>
-          )}
-
-          {/* Instant Office (Light) / Fun (Dark) Panic Toggle */}
-          <button
-            onClick={toggleTheme}
+      {isMobile ? (
+        /* ULTRA-CLEAN MOBILE TOP STRIP (Zero clutter!) */
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
+          <div
             style={{
-              ...styles.inviteBtn,
+              ...styles.badge,
+              padding: "5px 9px",
+              fontSize: "11px",
               backgroundColor: panelBg,
               border: panelBorder,
               color: panelText,
             }}
-            title="Anında Açık Mod / Eğlence Modu değiştir (Kısayol: Shift + O)"
+          >
+            <span style={{ fontWeight: 800, color: isOffice ? "#2563eb" : "#fbbf24" }}>
+              D{gameInfo.wave}
+            </span>
+            <span
+              style={{
+                fontSize: "9px",
+                fontWeight: 800,
+                padding: "1px 4px",
+                borderRadius: "4px",
+                backgroundColor: isHard ? "rgba(220,38,38,0.28)" : "rgba(245,158,11,0.22)",
+                color: isHard ? "#fca5a5" : "#fcd34d",
+              }}
+            >
+              {isHard ? "ZOR" : "ORTA"}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            {localPlayer && (
+              <div
+                style={{
+                  ...styles.myStats,
+                  padding: "5px 9px",
+                  gap: "7px",
+                  backgroundColor: panelBg,
+                  border: panelBorder,
+                  color: panelText,
+                }}
+              >
+                <Heart size={12} color="#ef4444" fill="#ef4444" />
+                <div style={{ ...styles.hpBarOuter, width: "44px" }}>
+                  <div
+                    style={{
+                      ...styles.hpBarInner,
+                      width: `${Math.max(0, Math.min(100, (localPlayer.hp / localPlayer.maxHp) * 100))}%`,
+                      backgroundColor:
+                        localPlayer.hp > 50 ? "#22c55e" : localPlayer.hp > 25 ? "#eab308" : "#ef4444",
+                    }}
+                  />
+                </div>
+                <span style={{ color: "#facc15", fontWeight: 800, fontSize: "11px" }}>
+                  ⭐ {localPlayer.score}
+                </span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              style={{
+                ...styles.inviteBtn,
+                padding: "6px 8px",
+                backgroundColor: panelBg,
+                border: panelBorder,
+                color: panelText,
+              }}
+              aria-label="Menü"
+            >
+              {mobileMenuOpen ? <X size={16} /> : <Menu size={16} />}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={styles.topBar}>
+          {/* Left Controls (Desktop) */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            {onBackToPortal && (
+              <button
+                onClick={onBackToPortal}
+                style={{
+                  ...styles.portalHomeBtn,
+                  backgroundColor: isOffice ? "#2563eb" : "#f05232",
+                  borderBottom: isOffice ? "2px solid #1d4ed8" : "3px solid #c93b1e",
+                }}
+                title="Ana sayfaya dön"
+              >
+                {isOffice ? "Workspace" : "SITECONT GAME"}
+              </button>
+            )}
+
+            {/* Instant Office (Light) / Fun (Dark) Panic Toggle */}
+            <button
+              onClick={toggleTheme}
+              style={{
+                ...styles.inviteBtn,
+                backgroundColor: panelBg,
+                border: panelBorder,
+                color: panelText,
+              }}
+              title="Anında Açık Mod / Eğlence Modu değiştir (Kısayol: Shift + O)"
+            >
+              {isOffice ? <Moon size={14} color="#2563eb" /> : <Sun size={14} color="#fbbf24" />}
+              <span>{isOffice ? "Eğlence Modu" : "Açık Mod"}</span>
+            </button>
+
+            <div
+              style={{
+                ...styles.badge,
+                backgroundColor: panelBg,
+                border: panelBorder,
+                color: panelText,
+              }}
+            >
+              {!isOffice && <Flame size={15} color="#f97316" />}
+              <span style={{ fontWeight: 800, color: isOffice ? "#2563eb" : "#fbbf24" }}>
+                {isOffice ? `Aşama ${gameInfo.wave}` : `DALGA ${gameInfo.wave}`}
+              </span>
+              <span
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 800,
+                  padding: "2px 6px",
+                  borderRadius: "6px",
+                  backgroundColor: isHard
+                    ? isOffice
+                      ? "#fee2e2"
+                      : "rgba(220,38,38,0.28)"
+                    : isOffice
+                      ? "#fef3c7"
+                      : "rgba(245,158,11,0.22)",
+                  color: isHard
+                    ? isOffice
+                      ? "#b91c1c"
+                      : "#fca5a5"
+                    : isOffice
+                      ? "#b45309"
+                      : "#fcd34d",
+                }}
+              >
+                {isHard ? "ZOR" : "ORTA"}
+              </span>
+              <span style={styles.divider}>•</span>
+              <span style={{ color: isOffice ? "#475569" : "#f87171", fontSize: "12px", fontWeight: 600 }}>
+                {isOffice ? `${gameInfo.enemyCount} Kayıt` : `${gameInfo.enemyCount} Düşman`}
+              </span>
+              <span style={styles.divider}>•</span>
+              <Users size={14} color={isOffice ? "#64748b" : "#a8a29e"} />
+              <span style={{ color: isOffice ? "#64748b" : "#a8a29e", fontSize: "12px" }}>
+                {players.length} {isOffice ? "Kullanıcı" : "Oyuncu"}
+              </span>
+            </div>
+
+            {/* Mode Toggle Button */}
+            <button
+              onClick={handleToggleMode}
+              style={{
+                ...styles.modeToggleBtn,
+                backgroundColor: isOffice
+                  ? "#ffffff"
+                  : isPvp
+                    ? "rgba(220, 38, 38, 0.9)"
+                    : "rgba(22, 163, 74, 0.9)",
+                borderColor: isOffice ? "#cbd5e1" : isPvp ? "#ef4444" : "#22c55e",
+                color: isOffice ? "#0f172a" : "#ffffff",
+                cursor: isHost ? "pointer" : "not-allowed",
+              }}
+              title={
+                isHost
+                  ? "Oda sahibi olarak oyun modunu değiştirmek için tıkla"
+                  : "Sadece Oda Sahibi oyun modunu değiştirebilir"
+              }
+            >
+              {isPvp ? <Swords size={14} /> : <Shield size={14} />}
+              <span>
+                {isOffice
+                  ? isPvp
+                    ? "Mod: Serbest (PvP)"
+                    : "Mod: Ortak (Co-op)"
+                  : isPvp
+                    ? "KAOS / PvP"
+                    : "CO-OP (Birlikte)"}
+              </span>
+              {isHost && (
+                <span
+                  style={{
+                    ...styles.switchTag,
+                    backgroundColor: isOffice ? "#eff6ff" : "rgba(0,0,0,0.28)",
+                    color: isOffice ? "#1d4ed8" : "#ffffff",
+                  }}
+                >
+                  Değiştir
+                </span>
+              )}
+            </button>
+
+            {/* Invite Friend Button */}
+            <button
+              onClick={handleCopyInvite}
+              style={{
+                ...styles.inviteBtn,
+                backgroundColor: panelBg,
+                border: panelBorder,
+                color: panelText,
+              }}
+              title="Oda davet linkini kopyala"
+            >
+              {copied ? (
+                <Check size={14} color="#16a34a" />
+              ) : (
+                <Copy size={14} color={isOffice ? "#2563eb" : "#fbbf24"} />
+              )}
+              <span>
+                {copied ? "Link Kopyalandı!" : `Davet (${room.roomId})`}
+              </span>
+            </button>
+          </div>
+
+          {/* Right: Local Player HP & Score */}
+          {localPlayer && (
+            <div
+              style={{
+                ...styles.myStats,
+                backgroundColor: panelBg,
+                border: panelBorder,
+                color: panelText,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div
+                  style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: "50%",
+                    backgroundColor: localPlayer.color,
+                  }}
+                />
+                <span style={{ fontWeight: 700 }}>{localPlayer.name}</span>
+              </div>
+
+              {/* Health Bar */}
+              <div style={styles.hpBarWrap}>
+                <Heart size={13} color="#ef4444" fill="#ef4444" />
+                <div style={styles.hpBarOuter}>
+                  <div
+                    style={{
+                      ...styles.hpBarInner,
+                      width: `${Math.max(0, Math.min(100, (localPlayer.hp / localPlayer.maxHp) * 100))}%`,
+                      backgroundColor:
+                        localPlayer.hp > 50 ? "#22c55e" : localPlayer.hp > 25 ? "#eab308" : "#ef4444",
+                    }}
+                  />
+                </div>
+                <span style={{ fontSize: "11px", fontWeight: 700 }}>
+                  {Math.max(0, Math.round(localPlayer.hp))}/{localPlayer.maxHp}
+                </span>
+              </div>
+
+              <div style={{ color: "#f87171", fontWeight: 700 }}>💀 {localPlayer.kills}</div>
+              <div style={{ color: "#facc15", fontWeight: 700 }}>⭐ {localPlayer.score}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Mobile Collapsible Menu Drawer */}
+      {isMobile && mobileMenuOpen && (
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            position: "absolute",
+            top: "48px",
+            right: "12px",
+            width: "225px",
+            maxHeight: "75vh",
+            overflowY: "auto",
+            backgroundColor: isOffice ? "#ffffff" : "rgba(24, 24, 27, 0.96)",
+            border: panelBorder,
+            borderRadius: "14px",
+            padding: "10px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            pointerEvents: "auto",
+            zIndex: 60,
+            boxShadow: "0 12px 28px rgba(0,0,0,0.4)",
+          }}
+        >
+          <div style={{ fontSize: "11px", color: "#9ca3af", fontWeight: 700, padding: "2px 4px" }}>
+            Oda: {room.roomId} • {players.length} Oyuncu
+          </div>
+
+          <button
+            type="button"
+            onClick={handleCopyInvite}
+            style={{
+              ...styles.inviteBtn,
+              justifyContent: "flex-start",
+              backgroundColor: panelBg,
+              border: panelBorder,
+              color: panelText,
+            }}
+          >
+            {copied ? <Check size={14} color="#16a34a" /> : <Copy size={14} color="#fbbf24" />}
+            <span>{copied ? "Link Kopyalandı!" : "Davet Linki Kopyala"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleToggleMode}
+            style={{
+              ...styles.modeToggleBtn,
+              justifyContent: "flex-start",
+              backgroundColor: isPvp ? "rgba(220,38,38,0.9)" : "rgba(22,163,74,0.9)",
+              borderColor: isPvp ? "#ef4444" : "#22c55e",
+              color: "#ffffff",
+            }}
+          >
+            {isPvp ? <Swords size={14} /> : <Shield size={14} />}
+            <span>{isPvp ? "Mod: KAOS (PvP)" : "Mod: CO-OP"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setShowChat((v) => !v);
+              setMobileMenuOpen(false);
+            }}
+            style={{
+              ...styles.inviteBtn,
+              justifyContent: "flex-start",
+              backgroundColor: panelBg,
+              border: panelBorder,
+              color: panelText,
+            }}
+          >
+            <MessageSquare size={14} color="#fbbf24" />
+            <span>{showChat ? "Sohbeti Gizle" : "Sohbeti Aç"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              toggleTheme();
+              setMobileMenuOpen(false);
+            }}
+            style={{
+              ...styles.inviteBtn,
+              justifyContent: "flex-start",
+              backgroundColor: panelBg,
+              border: panelBorder,
+              color: panelText,
+            }}
           >
             {isOffice ? <Moon size={14} color="#2563eb" /> : <Sun size={14} color="#fbbf24" />}
             <span>{isOffice ? "Eğlence Modu" : "Açık Mod"}</span>
           </button>
 
-          <div
-            style={{
-              ...styles.badge,
-              backgroundColor: panelBg,
-              border: panelBorder,
-              color: panelText,
-            }}
-          >
-            {!isOffice && <Flame size={15} color="#f97316" />}
-            <span style={{ fontWeight: 800, color: isOffice ? "#2563eb" : "#fbbf24" }}>
-              {isOffice ? `Aşama ${gameInfo.wave}` : `DALGA ${gameInfo.wave}`}
-            </span>
-            <span
-              style={{
-                fontSize: "10px",
-                fontWeight: 800,
-                padding: "2px 6px",
-                borderRadius: "6px",
-                backgroundColor: isHard
-                  ? isOffice
-                    ? "#fee2e2"
-                    : "rgba(220,38,38,0.28)"
-                  : isOffice
-                    ? "#fef3c7"
-                    : "rgba(245,158,11,0.22)",
-                color: isHard
-                  ? isOffice
-                    ? "#b91c1c"
-                    : "#fca5a5"
-                  : isOffice
-                    ? "#b45309"
-                    : "#fcd34d",
-              }}
-            >
-              {isHard ? "ZOR" : "ORTA"}
-            </span>
-            <span style={styles.divider}>•</span>
-            <span style={{ color: isOffice ? "#475569" : "#f87171", fontSize: "12px", fontWeight: 600 }}>
-              {isOffice ? `${gameInfo.enemyCount} Kayıt` : `${gameInfo.enemyCount} Düşman`}
-            </span>
-            <span style={styles.divider}>•</span>
-            <Users size={14} color={isOffice ? "#64748b" : "#a8a29e"} />
-            <span style={{ color: isOffice ? "#64748b" : "#a8a29e", fontSize: "12px" }}>
-              {players.length} {isOffice ? "Kullanıcı" : "Oyuncu"}
-            </span>
-          </div>
-
-          {/* Mode Toggle Button */}
-          <button
-            onClick={handleToggleMode}
-            style={{
-              ...styles.modeToggleBtn,
-              backgroundColor: isOffice
-                ? "#ffffff"
-                : isPvp
-                  ? "rgba(220, 38, 38, 0.9)"
-                  : "rgba(22, 163, 74, 0.9)",
-              borderColor: isOffice ? "#cbd5e1" : isPvp ? "#ef4444" : "#22c55e",
-              color: isOffice ? "#0f172a" : "#ffffff",
-              cursor: isHost ? "pointer" : "not-allowed",
-            }}
-            title={
-              isHost
-                ? "Oda sahibi olarak oyun modunu değiştirmek için tıkla"
-                : "Sadece Oda Sahibi oyun modunu değiştirebilir"
-            }
-          >
-            {isPvp ? <Swords size={14} /> : <Shield size={14} />}
-            <span>
-              {isOffice
-                ? isPvp
-                  ? "Mod: Serbest (PvP)"
-                  : "Mod: Ortak (Co-op)"
-                : isPvp
-                  ? "KAOS / PvP"
-                  : "CO-OP (Birlikte)"}
-            </span>
-            {isHost && (
-              <span
+          {/* Compact Leaderboard inside mobile menu */}
+          <div style={{ borderTop: panelBorder, paddingTop: "6px" }}>
+            <div style={{ fontSize: "10px", fontWeight: 800, color: "#9ca3af", marginBottom: "4px" }}>
+              SKOR TABLOSU
+            </div>
+            {players.slice(0, 5).map((p, idx) => (
+              <div
+                key={p.id}
                 style={{
-                  ...styles.switchTag,
-                  backgroundColor: isOffice ? "#eff6ff" : "rgba(0,0,0,0.28)",
-                  color: isOffice ? "#1d4ed8" : "#ffffff",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: "11px",
+                  padding: "2px 0",
+                  color: p.isLocal ? "#fbbf24" : panelText,
                 }}
               >
-                Değiştir
-              </span>
-            )}
-          </button>
-
-          {/* Invite Friend Button */}
-          <button
-            onClick={handleCopyInvite}
-            style={{
-              ...styles.inviteBtn,
-              backgroundColor: panelBg,
-              border: panelBorder,
-              color: panelText,
-            }}
-            title="Oda davet linkini kopyala"
-          >
-            {copied ? (
-              <Check size={14} color="#16a34a" />
-            ) : (
-              <Copy size={14} color={isOffice ? "#2563eb" : "#fbbf24"} />
-            )}
-            <span>
-              {copied ? "Link Kopyalandı!" : `Davet (${room.roomId})`}
-            </span>
-          </button>
-        </div>
-
-        {/* Right: Local Player HP & Score */}
-        {localPlayer && (
-          <div
-            style={{
-              ...styles.myStats,
-              backgroundColor: panelBg,
-              border: panelBorder,
-              color: panelText,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <div
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  backgroundColor: localPlayer.color,
-                }}
-              />
-              <span style={{ fontWeight: 700 }}>{localPlayer.name}</span>
-            </div>
-
-            {/* Health Bar */}
-            <div style={styles.hpBarWrap}>
-              <Heart size={13} color="#ef4444" fill="#ef4444" />
-              <div style={styles.hpBarOuter}>
-                <div
-                  style={{
-                    ...styles.hpBarInner,
-                    width: `${Math.max(0, Math.min(100, (localPlayer.hp / localPlayer.maxHp) * 100))}%`,
-                    backgroundColor:
-                      localPlayer.hp > 50 ? "#22c55e" : localPlayer.hp > 25 ? "#eab308" : "#ef4444",
-                  }}
-                />
+                <span>
+                  #{idx + 1} {p.name}
+                </span>
+                <span style={{ fontWeight: 800 }}>⭐ {p.score}</span>
               </div>
-              <span style={{ fontSize: "11px", fontWeight: 700 }}>
-                {Math.max(0, Math.round(localPlayer.hp))}/{localPlayer.maxHp}
-              </span>
-            </div>
-
-            <div style={{ color: "#f87171", fontWeight: 700 }}>💀 {localPlayer.kills}</div>
-            <div style={{ color: "#facc15", fontWeight: 700 }}>⭐ {localPlayer.score}</div>
+            ))}
           </div>
-        )}
-      </div>
 
-      {/* Kill Feed (Top Left below header) */}
-      {killFeed.length > 0 && (
+          {onBackToPortal && (
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onBackToPortal();
+              }}
+              style={{
+                ...styles.portalHomeBtn,
+                textAlign: "center",
+                backgroundColor: isOffice ? "#2563eb" : "#f05232",
+                borderBottom: isOffice ? "2px solid #1d4ed8" : "3px solid #c93b1e",
+              }}
+            >
+              Ana Sayfaya Dön
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Kill Feed (Desktop only — keep mobile screen clear!) */}
+      {!isMobile && killFeed.length > 0 && (
         <div style={styles.killFeedContainer}>
           {killFeed.map((k, idx) => (
             <div key={idx} style={styles.killFeedItem}>
@@ -433,11 +658,12 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
         </div>
       )}
 
-      {/* Leaderboard Panel (Top Right) */}
-      <div
-        style={{
-          ...styles.leaderboard,
-          width: isMobile ? "158px" : "230px",
+      {/* Leaderboard Panel (Desktop only — on mobile it's inside the ☰ menu!) */}
+      {!isMobile && (
+        <div
+          style={{
+            ...styles.leaderboard,
+            width: "230px",
           top: isMobile ? "112px" : "64px",
           padding: isMobile ? "8px" : "12px",
           backgroundColor: panelBg,
