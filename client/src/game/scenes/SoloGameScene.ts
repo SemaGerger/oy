@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { EventBus } from "../EventBus";
 import { AppTheme, getSavedTheme } from "../../theme/ThemeContext";
+import { HERO_SKINS, getHeroById } from "../heroes";
 
 interface SoloObstacle {
   type: "rock" | "wall" | "pillar";
@@ -49,6 +50,7 @@ export class SoloGameScene extends Phaser.Scene {
   private currentTheme: AppTheme = getSavedTheme();
   private bgGraphics: Phaser.GameObjects.Graphics | null = null;
   private difficulty: "medium" | "hard" = "medium";
+  private heroId: string = "cyber_cat";
 
   // Player state
   private playerX = 1100;
@@ -73,6 +75,7 @@ export class SoloGameScene extends Phaser.Scene {
   // Player visuals
   private playerContainer!: Phaser.GameObjects.Container;
   private turretContainer!: Phaser.GameObjects.Container;
+  private playerSprite: Phaser.GameObjects.Image | null = null;
   private playerHpFill!: Phaser.GameObjects.Rectangle;
   private playerScoreText!: Phaser.GameObjects.Text;
 
@@ -107,9 +110,18 @@ export class SoloGameScene extends Phaser.Scene {
 
   private lastHudEmit = 0;
 
-  constructor(difficulty: "medium" | "hard" = "medium") {
+  constructor(difficulty: "medium" | "hard" = "medium", heroId: string = "cyber_cat") {
     super("SoloGameScene");
     this.difficulty = difficulty === "hard" ? "hard" : "medium";
+    this.heroId = heroId;
+  }
+
+  preload() {
+    for (const hero of HERO_SKINS) {
+      if (!this.textures.exists(hero.spriteKey)) {
+        this.load.image(hero.spriteKey, hero.spritePath);
+      }
+    }
   }
 
   private handleThemeChanged = (nextTheme: AppTheme) => {
@@ -535,20 +547,32 @@ export class SoloGameScene extends Phaser.Scene {
     const rangeRing = this.add.circle(0, 0, 270, 0xffffff, 0.02);
     rangeRing.setStrokeStyle(1.5, 0xfbbf24, 0.22);
 
+    // Ground shadow
+    const shadow = this.add.ellipse(0, 22, 42, 16, 0x000000, 0.35);
+
+    // Subtle directional aim chevron (rotates toward target)
     this.turretContainer = this.add.container(0, 0);
-    const gunBarrel = this.add.rectangle(18, 0, 22, 8, 0x94a3b8);
-    gunBarrel.setStrokeStyle(1.5, 0x0f172a);
-    const gunMuzzle = this.add.rectangle(28, 0, 5, 10, 0x475569);
-    this.turretContainer.add([gunBarrel, gunMuzzle]);
+    const aimArrow = this.add.triangle(32, 0, 0, -5, 10, 0, 0, 5, 0xfbbf24, 0.85);
+    aimArrow.setStrokeStyle(1.5, 0x0f172a, 0.8);
+    this.turretContainer.add([aimArrow]);
 
-    const body = this.add.circle(0, 0, 20, 0x3b82f6);
-    body.setStrokeStyle(3, 0xffffff, 1);
+    const hero = getHeroById(this.heroId);
+    const visualItems: Phaser.GameObjects.GameObject[] = [rangeRing, shadow, this.turretContainer];
 
-    const hpBg = this.add.rectangle(0, -30, 46, 7, 0x0f172a, 0.85);
-    this.playerHpFill = this.add.rectangle(-22, -30, 44, 5, 0x22c55e, 1).setOrigin(0, 0.5);
+    if (this.textures.exists(hero.spriteKey)) {
+      this.playerSprite = this.add.image(0, -2, hero.spriteKey).setDisplaySize(60, 60);
+      visualItems.push(this.playerSprite);
+    } else {
+      const fallbackBody = this.add.circle(0, 0, 20, 0x3b82f6);
+      fallbackBody.setStrokeStyle(3, 0xffffff, 1);
+      visualItems.push(fallbackBody);
+    }
+
+    const hpBg = this.add.rectangle(0, -38, 46, 7, 0x0f172a, 0.85);
+    this.playerHpFill = this.add.rectangle(-22, -38, 44, 5, 0x22c55e, 1).setOrigin(0, 0.5);
 
     this.playerScoreText = this.add
-      .text(0, 30, "💀 0  ⭐ 0", {
+      .text(0, 36, "💀 0  ⭐ 0", {
         fontFamily: "sans-serif",
         fontSize: "11px",
         color: "#fbbf24",
@@ -557,14 +581,8 @@ export class SoloGameScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.playerContainer.add([
-      rangeRing,
-      this.turretContainer,
-      body,
-      hpBg,
-      this.playerHpFill,
-      this.playerScoreText,
-    ]);
+    visualItems.push(hpBg, this.playerHpFill, this.playerScoreText);
+    this.playerContainer.add(visualItems);
 
     this.cameras.main.startFollow(this.playerContainer, true, 0.12, 0.12);
     this.applyResponsiveZoom();
@@ -995,6 +1013,11 @@ export class SoloGameScene extends Phaser.Scene {
 
       this.playerContainer.setPosition(this.playerX, this.playerY);
       this.turretContainer.rotation = this.playerRot;
+      if (this.playerSprite) {
+        this.playerSprite.setFlipX(Math.cos(this.playerRot) < 0);
+        const isMoving = Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05;
+        this.playerSprite.y = isMoving ? -2 + Math.sin(time * 0.018) * 3 : -2;
+      }
 
       // Coin magnet + pickup (105px magnet pull for crisp mobile feel)
       for (let i = this.coins.length - 1; i >= 0; i--) {

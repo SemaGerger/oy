@@ -2,11 +2,13 @@ import Phaser from "phaser";
 import { Room } from "colyseus.js";
 import { EventBus } from "../EventBus";
 import { AppTheme, getSavedTheme } from "../../theme/ThemeContext";
+import { HERO_SKINS, getHeroById } from "../heroes";
 
 interface PlayerVisual {
   container: Phaser.GameObjects.Container;
   turretContainer: Phaser.GameObjects.Container;
   body: Phaser.GameObjects.Arc;
+  heroSprite?: Phaser.GameObjects.Image;
   hpBarBg: Phaser.GameObjects.Rectangle;
   hpBarFill: Phaser.GameObjects.Rectangle;
   nameText: Phaser.GameObjects.Text;
@@ -85,6 +87,14 @@ export class GameScene extends Phaser.Scene {
   init(data?: { room?: Room }) {
     if (data && data.room) {
       this.room = data.room;
+    }
+  }
+
+  preload() {
+    for (const hero of HERO_SKINS) {
+      if (!this.textures.exists(hero.spriteKey)) {
+        this.load.image(hero.spriteKey, hero.spritePath);
+      }
     }
   }
 
@@ -668,25 +678,33 @@ export class GameScene extends Phaser.Scene {
 
     const colorHex = Phaser.Display.Color.HexStringToColor(player.color || "#38bdf8").color;
 
-    // Turret / Gun barrel container (rotates toward mouse)
-    const turretContainer = this.add.container(0, 0);
-    const gunBarrel = this.add.rectangle(18, 0, 22, 8, 0x94a3b8);
-    gunBarrel.setStrokeStyle(1.5, 0x0f172a);
-    const gunMuzzle = this.add.rectangle(28, 0, 5, 10, 0x475569);
-    turretContainer.add([gunBarrel, gunMuzzle]);
+    // Ground shadow + subtle team color ring underneath
+    const shadow = this.add.ellipse(0, 22, 42, 16, 0x000000, 0.35);
+    const body = this.add.circle(0, 14, 18, colorHex, 0.22);
+    body.setStrokeStyle(isLocal ? 2.5 : 2, isLocal ? 0xffffff : colorHex, 0.85);
 
-    // Player body
-    const body = this.add.circle(0, 0, 20, colorHex);
-    body.setStrokeStyle(isLocal ? 3 : 2, isLocal ? 0xffffff : 0x0f172a, 1);
+    // Subtle directional aim chevron (rotates toward target)
+    const turretContainer = this.add.container(0, 0);
+    const aimArrow = this.add.triangle(32, 0, 0, -5, 10, 0, 0, 5, 0xfbbf24, 0.85);
+    aimArrow.setStrokeStyle(1.5, 0x0f172a, 0.8);
+    turretContainer.add([aimArrow]);
+
+    const hero = getHeroById(player.skin);
+    let heroSprite: Phaser.GameObjects.Image | undefined;
+    if (this.textures.exists(hero.spriteKey)) {
+      heroSprite = this.add.image(0, -2, hero.spriteKey).setDisplaySize(60, 60);
+    } else {
+      body.setPosition(0, 0).setRadius(20).setFillStyle(colorHex, 1);
+    }
 
     // Health bar above player
-    const hpBarBg = this.add.rectangle(0, -30, 46, 7, 0x0f172a, 0.85);
+    const hpBarBg = this.add.rectangle(0, -38, 46, 7, 0x0f172a, 0.85);
     hpBarBg.setStrokeStyle(1, 0x334155);
-    const hpBarFill = this.add.rectangle(-22, -30, 44, 5, 0x22c55e, 1).setOrigin(0, 0.5);
+    const hpBarFill = this.add.rectangle(-22, -38, 44, 5, 0x22c55e, 1).setOrigin(0, 0.5);
 
     // Player Name
     const nameText = this.add
-      .text(0, -44, player.name || "Oyuncu", {
+      .text(0, -52, player.name || "Oyuncu", {
         fontFamily: "sans-serif",
         fontSize: "13px",
         fontStyle: "bold",
@@ -698,7 +716,7 @@ export class GameScene extends Phaser.Scene {
 
     // Kills & Score
     const scoreText = this.add
-      .text(0, 30, `💀 ${player.kills || 0}  ⭐ ${player.score || 0}`, {
+      .text(0, 36, `💀 ${player.kills || 0}  ⭐ ${player.score || 0}`, {
         fontFamily: "sans-serif",
         fontSize: "11px",
         color: "#facc15",
@@ -707,12 +725,16 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    container.add([turretContainer, body, hpBarBg, hpBarFill, nameText, scoreText]);
+    const items: Phaser.GameObjects.GameObject[] = [shadow, body, turretContainer];
+    if (heroSprite) items.push(heroSprite);
+    items.push(hpBarBg, hpBarFill, nameText, scoreText);
+    container.add(items);
 
     return {
       container,
       turretContainer,
       body,
+      heroSprite,
       hpBarBg,
       hpBarFill,
       nameText,

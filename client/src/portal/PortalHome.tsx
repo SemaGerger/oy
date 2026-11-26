@@ -269,6 +269,73 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                 <Link2 size={14} color={isOffice ? "#64748b" : "#f59e0b"} /> Oda Koduyla Davet
               </span>
             </div>
+            {/* Character / Hero Skin Picker */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "4px" }}>
+              <span
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  color: isOffice ? "#475569" : "#d6d3d1",
+                }}
+              >
+                {isOffice ? "Profil Simgesi:" : "Karakterini Seç:"}
+              </span>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {HERO_SKINS.map((hero) => {
+                  const active = selectedHeroId === hero.id;
+                  return (
+                    <button
+                      key={hero.id}
+                      type="button"
+                      onClick={() => handlePickHero(hero.id)}
+                      title={hero.name}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: "3px",
+                        padding: "5px 7px",
+                        borderRadius: "12px",
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        minWidth: "60px",
+                        border: active
+                          ? `2px solid ${hero.accent}`
+                          : isOffice
+                            ? "1px solid #cbd5e1"
+                            : "1px solid rgba(255,255,255,0.14)",
+                        backgroundColor: active
+                          ? isOffice
+                            ? "#eff6ff"
+                            : "rgba(255,255,255,0.12)"
+                          : isOffice
+                            ? "#f8fafc"
+                            : "rgba(0,0,0,0.22)",
+                        transform: active ? "translateY(-2px)" : "none",
+                        transition: "transform 0.12s ease, border-color 0.12s ease",
+                      }}
+                    >
+                      <img
+                        src={hero.spritePath}
+                        alt={hero.name}
+                        style={{ width: "42px", height: "42px", objectFit: "contain" }}
+                      />
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          fontWeight: active ? 800 : 600,
+                          color: isOffice ? "#0f172a" : "#fafaf9",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {hero.name.split(" ")[0]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Solo Difficulty Selector */}
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
               <span
@@ -357,7 +424,7 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
 
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "6px" }}>
               <button
-                onClick={() => onSelectGame(firstGame.id, "solo", soloDifficulty)}
+                onClick={() => onSelectGame(firstGame.id, "solo", soloDifficulty, selectedHeroId)}
                 style={{
                   ...styles.heroPlayBtn,
                   marginTop: 0,
@@ -370,7 +437,9 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
               </button>
 
               <button
-                onClick={() => onSelectGame(firstGame.id, "multiplayer", soloDifficulty)}
+                onClick={() =>
+                  onSelectGame(firstGame.id, "multiplayer", soloDifficulty, selectedHeroId)
+                }
                 style={{
                   ...styles.heroPlayBtn,
                   marginTop: 0,
@@ -392,7 +461,7 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
               backgroundColor: isOffice ? "#f8fafc" : "#2f3d36",
               border: isOffice ? "1px solid #cbd5e1" : "3px solid #3f5047",
             }}
-            onClick={() => onSelectGame(firstGame.id, "solo", soloDifficulty)}
+            onClick={() => onSelectGame(firstGame.id, "solo", soloDifficulty, selectedHeroId)}
             title="Tek kişilik hemen başlatmak için tıkla"
           >
             <div
