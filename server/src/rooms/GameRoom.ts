@@ -224,9 +224,22 @@ export class GameRoom extends Room<GameState> {
     this.setSimulationInterval((deltaTime) => this.update(deltaTime), 1000 / 50);
   }
 
-  onJoin(client: Client, _options?: any, auth?: AuthTokenPayload) {
+  onJoin(client: Client, options?: any, auth?: AuthTokenPayload) {
     const username = auth?.username || `Avcı_${client.sessionId.slice(0, 4)}`;
     console.log(`Authenticated player joined room ${this.roomId}: ${username}`);
+    const ALLOWED_SKINS = new Set([
+      "cyber_cat",
+      "cactus_cowboy",
+      "astro_duck",
+      "samurai_frog",
+      "steampunk_owl",
+      "slime_knight",
+    ]);
+    const requestedSkin =
+      options && typeof options === "object" && typeof options.skin === "string"
+        ? options.skin
+        : "cyber_cat";
+
     const player = new Player();
     player.id = client.sessionId;
     player.name = username; // Verified from HMAC token
@@ -234,6 +247,7 @@ export class GameRoom extends Room<GameState> {
     player.x = spawnPos.x;
     player.y = spawnPos.y;
     player.color = PLAYER_COLORS[this.state.players.size % PLAYER_COLORS.length];
+    player.skin = ALLOWED_SKINS.has(requestedSkin) ? requestedSkin : "cyber_cat";
     player.hp = 100;
     player.maxHp = 100;
     player.speed = 240;

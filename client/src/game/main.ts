@@ -31,9 +31,10 @@ export const createPhaserGame = (parent: HTMLElement, room: Room): Phaser.Game =
 
 export const createSoloPhaserGame = (
   parent: HTMLElement,
-  difficulty: "medium" | "hard" = "medium"
+  difficulty: "medium" | "hard" = "medium",
+  heroId: string = "cyber_cat"
 ): Phaser.Game => {
-  const soloScene = new SoloGameScene(difficulty);
+  const soloScene = new SoloGameScene(difficulty, heroId);
 
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,

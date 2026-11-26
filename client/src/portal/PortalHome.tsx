@@ -17,13 +17,15 @@ import {
 import { GAMES_REGISTRY } from "./gamesRegistry";
 import { AuthUser } from "../network/authClient";
 import { useTheme } from "../theme/ThemeContext";
+import { HERO_SKINS, getSavedHeroId, saveHeroId } from "../game/heroes";
 
 interface PortalHomeProps {
   user: AuthUser | null;
   onSelectGame: (
     gameId: string,
     playMode: "solo" | "multiplayer",
-    difficulty?: "medium" | "hard"
+    difficulty?: "medium" | "hard",
+    heroId?: string
   ) => void;
   onOpenAuth: () => void;
   onLogout: () => void;
@@ -37,7 +39,13 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
 }) => {
   const { isOffice, setTheme } = useTheme();
   const [soloDifficulty, setSoloDifficulty] = useState<"medium" | "hard">("medium");
+  const [selectedHeroId, setSelectedHeroId] = useState<string>(() => getSavedHeroId());
   const firstGame = GAMES_REGISTRY[0];
+
+  const handlePickHero = (id: string) => {
+    setSelectedHeroId(id);
+    saveHeroId(id);
+  };
 
   return (
     <div

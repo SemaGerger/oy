@@ -7,6 +7,7 @@ export class Player extends Schema {
   @type("number") declare y: number;
   @type("number") declare rotation: number;
   @type("string") declare color: string;
+  @type("string") declare skin: string;
   @type("number") declare score: number;
   @type("number") declare kills: number;
   @type("number") declare hp: number;
@@ -38,6 +39,7 @@ export class Player extends Schema {
     this.y = 0;
     this.rotation = 0;
     this.color = "#3b82f6";
+    this.skin = "cyber_cat";
     this.score = 0;
     this.kills = 0;
     this.hp = 100;

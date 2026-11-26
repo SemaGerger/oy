@@ -3,6 +3,7 @@ import { Room } from "colyseus.js";
 import { joinGameRoom, JoinOptions } from "./network/client";
 import { AuthUser, fetchCurrentUser, clearToken } from "./network/authClient";
 import { createPhaserGame, createSoloPhaserGame } from "./game/main";
+import { getSavedHeroId } from "./game/heroes";
 import { HUD } from "./ui/HUD";
 import { SoloHUD } from "./ui/SoloHUD";
 import { LoginScreen } from "./ui/LoginScreen";
@@ -27,6 +28,7 @@ export const App: React.FC = () => {
     hasInviteRoom ? "multiplayer" : "solo"
   );
   const [soloDifficulty, setSoloDifficulty] = useState<"medium" | "hard">("medium");
+  const [soloHeroId, setSoloHeroId] = useState<string>(() => getSavedHeroId());
 
   const [room, setRoom] = useState<Room | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -79,7 +81,8 @@ export const App: React.FC = () => {
   const handleSelectGame = (
     gameId: string,
     mode: "solo" | "multiplayer",
-    difficulty: "medium" | "hard" = "medium"
+    difficulty: "medium" | "hard" = "medium",
+    heroId: string = getSavedHeroId()
   ) => {
     if (room) {
       room.leave();
@@ -88,6 +91,7 @@ export const App: React.FC = () => {
     destroyPhaser();
     setError(null);
     setSoloDifficulty(difficulty);
+    setSoloHeroId(heroId);
     setPlayMode(mode);
     setSelectedGameId(gameId);
   };
@@ -129,14 +133,18 @@ export const App: React.FC = () => {
   // Mount Solo Phaser Scene
   useEffect(() => {
     if (selectedGameId && playMode === "solo" && phaserContainerRef.current && !gameInstanceRef.current) {
-      gameInstanceRef.current = createSoloPhaserGame(phaserContainerRef.current, soloDifficulty);
+      gameInstanceRef.current = createSoloPhaserGame(
+        phaserContainerRef.current,
+        soloDifficulty,
+        soloHeroId
+      );
     }
     return () => {
       if (playMode === "solo") {
         destroyPhaser();
       }
     };
-  }, [selectedGameId, playMode, soloDifficulty]);
+  }, [selectedGameId, playMode, soloDifficulty, soloHeroId]);
 
   // Mount Multiplayer Phaser Scene
   useEffect(() => {

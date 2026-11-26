@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { JoinOptions } from "../network/client";
 import { AuthUser } from "../network/authClient";
+import { HERO_SKINS, getSavedHeroId, saveHeroId } from "../game/heroes";
 
 interface LoginScreenProps {
   user: AuthUser;
@@ -31,6 +32,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 }) => {
   const [gameMode, setGameMode] = useState<"coop" | "pvp">("coop");
   const [difficulty, setDifficulty] = useState<"medium" | "hard">("medium");
+  const [selectedSkin, setSelectedSkin] = useState<string>(() => getSavedHeroId());
   const [roomCode, setRoomCode] = useState("");
   const [joinTab, setJoinTab] = useState<"public" | "friend">("public");
 
@@ -43,12 +45,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   }, []);
 
+  const handleSelectSkin = (id: string) => {
+    setSelectedSkin(id);
+    saveHeroId(id);
+  };
+
   const handleSubmit = (e: React.FormEvent, createNew: boolean = false) => {
     e.preventDefault();
     onJoin({
       token,
       gameMode,
       difficulty,
+      skin: selectedSkin,
       roomCode: joinTab === "friend" ? roomCode.trim() : undefined,
       createNew,
     });
@@ -69,7 +77,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
           <div>
             <h1 style={styles.title}>Survival Arena 2D</h1>
-            <p style={styles.subtitle}>Oda ayarlarını seç ve oyuna katıl</p>
+            <p style={styles.subtitle}>Karakterini ve oda ayarlarını seç</p>
           </div>
         </div>
 
@@ -83,6 +91,62 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         </div>
 
         <form onSubmit={(e) => handleSubmit(e, false)} style={styles.form}>
+          {/* Hero Character Selector */}
+          <div>
+            <label style={styles.label}>Karakterini Seç</label>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(6, 1fr)",
+                gap: "6px",
+              }}
+            >
+              {HERO_SKINS.map((hero) => {
+                const active = selectedSkin === hero.id;
+                return (
+                  <button
+                    key={hero.id}
+                    type="button"
+                    onClick={() => handleSelectSkin(hero.id)}
+                    title={hero.name}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "3px",
+                      padding: "5px 3px",
+                      borderRadius: "10px",
+                      cursor: "pointer",
+                      border: active ? `2px solid ${hero.accent}` : "1.5px solid #e4e4e7",
+                      backgroundColor: active ? "#f4f4f5" : "#ffffff",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    <img
+                      src={hero.spritePath}
+                      alt={hero.name}
+                      style={{ width: "38px", height: "38px", objectFit: "contain" }}
+                    />
+                    <span
+                      style={{
+                        fontSize: "9px",
+                        fontWeight: active ? 800 : 600,
+                        color: "#18181b",
+                        textAlign: "center",
+                        lineHeight: 1.1,
+                        maxWidth: "100%",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {hero.name.split(" ")[0]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           {/* Game Mode Selection */}
           <div>
             <label style={styles.label}>Oyun Modu (Oda sahibi oyun içinde değiştirebilir)</label>

@@ -16,6 +16,7 @@ export interface JoinOptions {
   token: string;
   gameMode: "coop" | "pvp";
   difficulty?: "medium" | "hard";
+  skin?: string;
   roomCode?: string;
   createNew?: boolean;
 }
@@ -25,25 +26,35 @@ export const joinGameRoom = async (options: JoinOptions): Promise<Room> => {
     activeRoom.leave();
   }
 
-  const { token, gameMode, difficulty = "medium", roomCode, createNew } = options;
+  const {
+    token,
+    gameMode,
+    difficulty = "medium",
+    skin = "cyber_cat",
+    roomCode,
+    createNew,
+  } = options;
 
   if (roomCode && roomCode.trim() !== "") {
     activeRoom = await colyseusClient.joinById(roomCode.trim(), {
       token,
       gameMode,
       difficulty,
+      skin,
     });
   } else if (createNew) {
     activeRoom = await colyseusClient.create("game_room", {
       token,
       gameMode,
       difficulty,
+      skin,
     });
   } else {
     activeRoom = await colyseusClient.joinOrCreate("game_room", {
       token,
       gameMode,
       difficulty,
+      skin,
     });
   }
 
