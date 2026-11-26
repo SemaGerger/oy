@@ -562,7 +562,7 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                 }}
               >
                 <div
-                  onClick={() => onSelectGame(game.id, "solo", soloDifficulty)}
+                  onClick={() => onSelectGame(game.id, "solo", soloDifficulty, selectedHeroId)}
                   style={{
                     ...styles.cardThumb,
                     cursor: "pointer",
@@ -633,7 +633,7 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                   >
                     <button
                       type="button"
-                      onClick={() => onSelectGame(game.id, "solo", soloDifficulty)}
+                      onClick={() => onSelectGame(game.id, "solo", soloDifficulty, selectedHeroId)}
                       style={{
                         ...styles.playPill,
                         border: "none",
@@ -649,7 +649,9 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => onSelectGame(game.id, "multiplayer", soloDifficulty)}
+                      onClick={() =>
+                        onSelectGame(game.id, "multiplayer", soloDifficulty, selectedHeroId)
+                      }
                       style={{
                         ...styles.playPill,
                         cursor: "pointer",

@@ -968,9 +968,16 @@ export class GameScene extends Phaser.Scene {
   update() {
     // 1. Interpolate Players
     this.playerVisuals.forEach((visual) => {
+      const prevX = visual.container.x;
+      const prevY = visual.container.y;
       visual.container.x = Phaser.Math.Linear(visual.container.x, visual.targetX, 0.3);
       visual.container.y = Phaser.Math.Linear(visual.container.y, visual.targetY, 0.3);
       visual.turretContainer.rotation = visual.targetRotation;
+      if (visual.heroSprite) {
+        visual.heroSprite.setFlipX(Math.cos(visual.targetRotation) < 0);
+        const moving = Math.hypot(visual.container.x - prevX, visual.container.y - prevY) > 0.3;
+        visual.heroSprite.y = moving ? -2 + Math.sin(this.time.now * 0.018) * 3 : -2;
+      }
     });
 
     // 2. Interpolate Enemies
