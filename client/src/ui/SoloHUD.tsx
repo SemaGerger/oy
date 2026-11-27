@@ -35,7 +35,9 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
   const [levelToast, setLevelToast] = useState<{
     level: number;
     heroName?: string;
+    heroTagline?: string;
     heroSprite?: string;
+    heroAccent?: string;
   } | null>(null);
   const [stats, setStats] = useState<SoloStats>({
     wave: 1,
@@ -88,15 +90,25 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
     let toastTimer: number | undefined;
     const onLevelUp = (payload: {
       level: number;
-      unlockedHero?: { name: string; spritePath: string } | null;
+      unlockedHero?: {
+        name: string;
+        tagline?: string;
+        spritePath: string;
+        accent?: string;
+      } | null;
     }) => {
       setLevelToast({
         level: payload.level,
         heroName: payload.unlockedHero?.name,
+        heroTagline: payload.unlockedHero?.tagline,
         heroSprite: payload.unlockedHero?.spritePath,
+        heroAccent: payload.unlockedHero?.accent,
       });
       if (toastTimer) window.clearTimeout(toastTimer);
-      toastTimer = window.setTimeout(() => setLevelToast(null), 4500);
+      // Only auto-dismiss if no new hero unlocked; hero unlocks wait for player's tap!
+      if (!payload.unlockedHero) {
+        toastTimer = window.setTimeout(() => setLevelToast(null), 3500);
+      }
     };
 
     EventBus.on("solo-stats-updated", onStats);
@@ -122,6 +134,11 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
     return () => window.clearInterval(id);
   }, [dashReadyAt]);
 
+  const handleCloseUnlockModal = () => {
+    setLevelToast(null);
+    EventBus.emit("resume-after-unlock");
+  };
+
   const panelBg = isOffice ? "#ffffff" : "rgba(28, 25, 23, 0.88)";
   const panelBorder = isOffice ? "1px solid #cbd5e1" : "1px solid #44403c";
   const panelText = isOffice ? "#0f172a" : "#fafaf9";
@@ -131,7 +148,131 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
 
   return (
     <div style={styles.overlay}>
-      {levelToast && (
+      {levelToast && levelToast.heroName ? (
+        /* 🎉 GRAND HERO UNLOCK CELEBRATION MODAL */
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: "rgba(9, 9, 11, 0.72)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+            pointerEvents: "auto",
+            zIndex: 80,
+          }}
+        >
+          <div
+            style={{
+              width: "330px",
+              maxWidth: "92vw",
+              backgroundColor: isOffice ? "#ffffff" : "#1c1917",
+              border: `3px solid ${levelToast.heroAccent || "#fbbf24"}`,
+              borderRadius: "24px",
+              padding: "24px 20px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              textAlign: "center",
+              gap: "10px",
+              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.65)",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "11px",
+                fontWeight: 900,
+                letterSpacing: "0.08em",
+                padding: "4px 12px",
+                borderRadius: "999px",
+                backgroundColor: "#fbbf24",
+                color: "#18181b",
+              }}
+            >
+              🎉 MÜJDE! SEVİYE {levelToast.level} OLDUN!
+            </div>
+
+            <div
+              style={{
+                fontSize: "13px",
+                fontWeight: 800,
+                color: isOffice ? "#475569" : "#d6d3d1",
+              }}
+            >
+              YENİ KAHRAMAN AÇILDI
+            </div>
+
+            <div
+              style={{
+                width: "148px",
+                height: "148px",
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${levelToast.heroAccent || "#fbbf24"}38 0%, transparent 72%)`,
+                border: `2px dashed ${levelToast.heroAccent || "#fbbf24"}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "4px 0",
+              }}
+            >
+              {levelToast.heroSprite && (
+                <img
+                  src={levelToast.heroSprite}
+                  alt={levelToast.heroName}
+                  style={{ width: "126px", height: "126px", objectFit: "contain" }}
+                />
+              )}
+            </div>
+
+            <div
+              style={{
+                fontSize: "22px",
+                fontWeight: 900,
+                color: isOffice ? "#0f172a" : "#ffffff",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {levelToast.heroName}
+            </div>
+
+            {levelToast.heroTagline && (
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: isOffice ? "#475569" : "#a8a29e",
+                  lineHeight: 1.45,
+                  maxWidth: "260px",
+                }}
+              >
+                {levelToast.heroTagline}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleCloseUnlockModal}
+              style={{
+                marginTop: "6px",
+                width: "100%",
+                padding: "12px 18px",
+                borderRadius: "14px",
+                border: "none",
+                backgroundColor: "#f05232",
+                borderBottom: "4px solid #c93b1e",
+                color: "#ffffff",
+                fontSize: "14px",
+                fontWeight: 900,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              🔥 Hemen Bu Karakterle Devam Et!
+            </button>
+          </div>
+        </div>
+      ) : levelToast ? (
         <div
           style={{
             position: "absolute",
@@ -141,35 +282,18 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
             backgroundColor: isOffice ? "#ffffff" : "rgba(24, 24, 27, 0.96)",
             border: "2px solid #fbbf24",
             color: isOffice ? "#0f172a" : "#fef3c7",
-            borderRadius: "16px",
-            padding: "8px 16px",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
+            borderRadius: "999px",
+            padding: "6px 16px",
+            fontSize: "12px",
+            fontWeight: 900,
             boxShadow: "0 10px 28px rgba(0,0,0,0.4)",
             zIndex: 55,
             whiteSpace: "nowrap",
           }}
         >
-          {levelToast.heroSprite && (
-            <img
-              src={levelToast.heroSprite}
-              alt={levelToast.heroName || "Yeni Karakter"}
-              style={{ width: "38px", height: "38px", objectFit: "contain" }}
-            />
-          )}
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontSize: "12px", fontWeight: 900, color: "#fbbf24" }}>
-              🎉 SEVİYE {levelToast.level}!
-            </span>
-            <span style={{ fontSize: "11px", fontWeight: 700 }}>
-              {levelToast.heroName
-                ? `Yeni Karakter Açıldı: ${levelToast.heroName}`
-                : "Harika gidiyorsun!"}
-            </span>
-          </div>
+          🎉 SEVİYE {levelToast.level}! Harika gidiyorsun!
         </div>
-      )}
+      ) : null}
       {stats.bossActive && !stats.isDead && (
         <div
           style={{

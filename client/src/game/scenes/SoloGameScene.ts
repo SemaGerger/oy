@@ -28,6 +28,7 @@ interface SoloEnemy {
   radius: number;
   damage: number;
   color: number;
+  lastShotAt?: number;
   container: Phaser.GameObjects.Container;
   bodyContainer: Phaser.GameObjects.Container;
   sprite?: Phaser.GameObjects.Image;
@@ -70,6 +71,7 @@ export class SoloGameScene extends Phaser.Scene {
   private score = 0;
   private kills = 0;
   private isDead = false;
+  private isPausedForUnlock = false;
   private respawnTimer = 0;
   private lastShootTime = 0;
   private lastDamageTime = 0;
@@ -93,6 +95,7 @@ export class SoloGameScene extends Phaser.Scene {
   private bushes: Array<{ x: number; y: number; img: Phaser.GameObjects.Image }> = [];
   private enemies: SoloEnemy[] = [];
   private bullets: SoloBullet[] = [];
+  private enemyBullets: SoloBullet[] = [];
   private coins: SoloCoin[] = [];
 
   // Controls (Drag Joystick + WASD)
@@ -335,11 +338,17 @@ export class SoloGameScene extends Phaser.Scene {
     this.input.on("pointerup", stopDrag);
     this.input.on("pointerupoutside", stopDrag);
 
+    const handleResumeAfterUnlock = () => {
+      this.isPausedForUnlock = false;
+    };
+
     EventBus.on("theme-changed", this.handleThemeChanged);
     EventBus.on("trigger-dash", this.handleTriggerDash);
+    EventBus.on("resume-after-unlock", handleResumeAfterUnlock);
     const cleanup = () => {
       EventBus.off("theme-changed", this.handleThemeChanged);
       EventBus.off("trigger-dash", this.handleTriggerDash);
+      EventBus.off("resume-after-unlock", handleResumeAfterUnlock);
       this.input.keyboard?.off("keydown-SPACE", this.handleTriggerDash);
       this.input.keyboard?.off("keydown-SHIFT", this.handleTriggerDash);
     };
@@ -718,32 +727,32 @@ export class SoloGameScene extends Phaser.Scene {
       }
     }
 
-    let hp = Math.round(45 * hpScale);
-    let speed = Math.min(230, Math.round(112 * spdScale));
+    let hp = Math.round(68 * hpScale);
+    let speed = Math.min(245, Math.round(142 * spdScale));
     let radius = 20;
-    let damage = Math.round(14 * dmgScale);
+    let damage = Math.round(17 * dmgScale);
     let color = 0xef4444;
     let stroke = 0x7f1d1d;
 
     if (type === "boss") {
-      hp = Math.round(520 * hpScale);
-      speed = Math.min(145, Math.round(78 * spdScale));
+      hp = Math.round(620 * hpScale);
+      speed = Math.min(160, Math.round(96 * spdScale));
       radius = 46;
-      damage = Math.round(32 * dmgScale);
+      damage = Math.round(36 * dmgScale);
       color = 0xbe123c;
       stroke = 0xfbbf24;
     } else if (type === "tank") {
-      hp = Math.round(135 * hpScale);
-      speed = Math.min(155, Math.round(74 * spdScale));
+      hp = Math.round(185 * hpScale);
+      speed = Math.min(165, Math.round(92 * spdScale));
       radius = 30;
-      damage = Math.round(24 * dmgScale);
+      damage = Math.round(26 * dmgScale);
       color = 0xa855f7;
       stroke = 0x581c87;
     } else if (type === "fast") {
-      hp = Math.round(26 * hpScale);
-      speed = Math.min(275, Math.round(170 * spdScale));
+      hp = Math.round(38 * hpScale);
+      speed = Math.min(285, Math.round(205 * spdScale));
       radius = 15;
-      damage = Math.round(10 * dmgScale);
+      damage = Math.round(13 * dmgScale);
       color = 0xf97316;
       stroke = 0x7c2d12;
     }
@@ -864,7 +873,7 @@ export class SoloGameScene extends Phaser.Scene {
   }
 
   private tryShoot(now: number) {
-    if (now - this.lastShootTime < 170) return;
+    if (now - this.lastShootTime < 250) return;
     this.lastShootTime = now;
 
     const muzzle = 28;
@@ -886,6 +895,25 @@ export class SoloGameScene extends Phaser.Scene {
       vy: Math.sin(this.playerRot) * speed,
       damage: 20,
       createdAt: now,
+      container,
+    });
+  }
+
+  private fireEnemyOrb(x: number, y: number, angle: number, damage: number, speed = 295) {
+    const container = this.add.container(x, y);
+    container.setDepth(18);
+    const glow = this.add.circle(0, 0, 10, 0xf43f5e, 0.35);
+    const core = this.add.circle(0, 0, 5.5, 0xfef08a, 1);
+    core.setStrokeStyle(2, 0xe11d48);
+    container.add([glow, core]);
+
+    this.enemyBullets.push({
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      damage,
+      createdAt: Date.now(),
       container,
     });
   }
@@ -957,6 +985,11 @@ export class SoloGameScene extends Phaser.Scene {
       this.heroId = unlockedHero.id;
       saveHeroId(unlockedHero.id);
       this.playerSprite.setTexture(unlockedHero.spriteKey).setDisplaySize(60, 60);
+      this.isPausedForUnlock = true;
+      this.isDragging = false;
+      this.activePointerId = null;
+      this.dragDx = 0;
+      this.dragDy = 0;
     }
   }
 
@@ -976,6 +1009,7 @@ export class SoloGameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number) {
+    if (this.isPausedForUnlock) return;
     const dt = Math.min(0.05, delta / 1000);
     const now = Date.now();
     const isHard = this.difficulty === "hard";
@@ -1162,8 +1196,8 @@ export class SoloGameScene extends Phaser.Scene {
             this.createHitEffect(b.x, b.y, e.color);
             e.hpBarFill.width = e.radius * 2 * Math.max(0, e.hp / e.maxHp);
 
-            // Subtle knockback on hit for punchier combat feel
-            const kb = e.type === "boss" ? 2 : e.type === "tank" ? 4 : 9;
+            // Subtle knockback on hit (small so enemies still pressure stationary players)
+            const kb = e.type === "boss" ? 1 : e.type === "tank" ? 1.5 : 2.5;
             const bLen = Math.hypot(b.vx, b.vy) || 1;
             e.x += (b.vx / bLen) * kb;
             e.y += (b.vy / bLen) * kb;
@@ -1208,7 +1242,7 @@ export class SoloGameScene extends Phaser.Scene {
       }
     }
 
-    // 4. Enemies chase player & collide with obstacles
+    // 4. Enemies chase player, fire ranged orbs, & collide with obstacles
     for (let i = 0; i < this.enemies.length; i++) {
       const e = this.enemies[i];
       if (!this.isDead) {
@@ -1225,6 +1259,25 @@ export class SoloGameScene extends Phaser.Scene {
 
         const contactDist = e.radius + 20;
         const dSq = (this.playerX - e.x) ** 2 + (this.playerY - e.y) ** 2;
+
+        // Ranged enemy attacks! Standing still = you get blasted; move or use cover/Dash!
+        if (dSq < 410 * 410 && dSq > 95 * 95) {
+          const shotCooldown =
+            e.type === "boss" ? 2100 : e.type === "tank" ? 2500 : 3400;
+          const canShoot = e.type === "boss" || e.type === "tank" || e.type === "normal";
+          if (canShoot && now - (e.lastShotAt || 0) > shotCooldown) {
+            e.lastShotAt = now + Math.random() * 450;
+            if (e.type === "boss") {
+              // 3-way spread shot!
+              this.fireEnemyOrb(e.x, e.y, angle - 0.24, Math.round(e.damage * 0.6), 310);
+              this.fireEnemyOrb(e.x, e.y, angle, Math.round(e.damage * 0.65), 325);
+              this.fireEnemyOrb(e.x, e.y, angle + 0.24, Math.round(e.damage * 0.6), 310);
+            } else {
+              this.fireEnemyOrb(e.x, e.y, angle, Math.round(e.damage * 0.7), 275);
+            }
+          }
+        }
+
         if (dSq < contactDist * contactDist && now - this.lastDamageTime > 600) {
           this.lastDamageTime = now;
           this.playerHp -= e.damage;
@@ -1259,6 +1312,53 @@ export class SoloGameScene extends Phaser.Scene {
       }
 
       e.container.setPosition(e.x, e.y);
+    }
+
+    // 4b. Enemy ranged energy orbs update & collisions (blocked by obstacles, dodgeable with Dash!)
+    for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
+      const eb = this.enemyBullets[i];
+      eb.x += eb.vx * dt;
+      eb.y += eb.vy * dt;
+      eb.container.setPosition(eb.x, eb.y);
+
+      let remove =
+        now - eb.createdAt > 1700 ||
+        eb.x < 0 ||
+        eb.x > this.mapW ||
+        eb.y < 0 ||
+        eb.y > this.mapH;
+
+      if (!remove) {
+        for (const obs of this.obstacles) {
+          if ((eb.x - obs.x) ** 2 + (eb.y - obs.y) ** 2 < (obs.radius + 5) ** 2) {
+            remove = true;
+            this.createHitEffect(eb.x, eb.y, 0xf43f5e);
+            break;
+          }
+        }
+      }
+
+      if (!remove && !this.isDead && now >= this.dashEndTime) {
+        if ((eb.x - this.playerX) ** 2 + (eb.y - this.playerY) ** 2 < 24 * 24) {
+          remove = true;
+          this.playerHp -= eb.damage;
+          this.cameras.main.shake(90, 0.004);
+          this.cameras.main.flash(120, 220, 38, 38, false);
+          this.createHitEffect(this.playerX, this.playerY, 0xf43f5e);
+
+          if (this.playerHp <= 0) {
+            this.playerHp = 0;
+            this.isDead = true;
+            this.respawnTimer = 3;
+            this.playerContainer.setAlpha(0.25);
+          }
+        }
+      }
+
+      if (remove) {
+        eb.container.destroy();
+        this.enemyBullets.splice(i, 1);
+      }
     }
 
     // 5. Hiding bushes turn translucent when player steps inside

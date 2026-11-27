@@ -1,6 +1,7 @@
 export interface HeroSkin {
   id: string;
   name: string;
+  tagline: string;
   spriteKey: string;
   spritePath: string;
   accent: string;
@@ -11,6 +12,7 @@ export const HERO_SKINS: HeroSkin[] = [
   {
     id: "slime_knight",
     name: "Şövalye Slime",
+    tagline: "Altın miğferli cesur başlangıç savaşçısı!",
     spriteKey: "hero_slime_knight",
     spritePath: "/assets/sprites/hero_slime_knight.webp",
     accent: "#14b8a6",
@@ -19,6 +21,7 @@ export const HERO_SKINS: HeroSkin[] = [
   {
     id: "cactus_cowboy",
     name: "Kaktüs Kovboy",
+    tagline: "Çölün en dikenli ve hızlı nişancısı!",
     spriteKey: "hero_cactus_cowboy",
     spritePath: "/assets/sprites/hero_cactus_cowboy.webp",
     accent: "#22c55e",
@@ -27,6 +30,7 @@ export const HERO_SKINS: HeroSkin[] = [
   {
     id: "astro_duck",
     name: "Astronot Ördek",
+    tagline: "Jetpack'li galaksi koruyucusu!",
     spriteKey: "hero_astro_duck",
     spritePath: "/assets/sprites/hero_astro_duck.webp",
     accent: "#38bdf8",
@@ -35,6 +39,7 @@ export const HERO_SKINS: HeroSkin[] = [
   {
     id: "samurai_frog",
     name: "Samuray Kurbağa",
+    tagline: "Katanasıyla gölgeleri yaran usta savaşçı!",
     spriteKey: "hero_samurai_frog",
     spritePath: "/assets/sprites/hero_samurai_frog.webp",
     accent: "#ef4444",
@@ -43,6 +48,7 @@ export const HERO_SKINS: HeroSkin[] = [
   {
     id: "steampunk_owl",
     name: "Buharlı Baykuş",
+    tagline: "Mekanik kanatlı gökyüzü komutanı!",
     spriteKey: "hero_steampunk_owl",
     spritePath: "/assets/sprites/hero_steampunk_owl.webp",
     accent: "#f59e0b",
@@ -51,6 +57,7 @@ export const HERO_SKINS: HeroSkin[] = [
   {
     id: "cyber_cat",
     name: "Siber Kedi",
+    tagline: "Arenanın efsanevi neon suikastçısı!",
     spriteKey: "hero_cyber_cat",
     spritePath: "/assets/sprites/hero_cyber_cat.webp",
     accent: "#06b6d4",
@@ -58,8 +65,8 @@ export const HERO_SKINS: HeroSkin[] = [
   },
 ];
 
-// Cumulative XP thresholds for Levels 1..6; beyond Level 6 each level is +1000 XP
-const LEVEL_XP_THRESHOLDS = [0, 150, 400, 800, 1400, 2200];
+// Cumulative XP thresholds for Levels 1..6; beyond Level 6 each level is +1800 XP
+const LEVEL_XP_THRESHOLDS = [0, 450, 1100, 2100, 3500, 5500];
 
 const HERO_STORAGE_KEY = "sitecont_hero_skin";
 const XP_STORAGE_KEY = "sitecont_player_xp";

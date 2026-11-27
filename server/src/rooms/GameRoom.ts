@@ -428,7 +428,7 @@ export class GameRoom extends Room<GameState> {
 
   private tryShoot(player: Player) {
     const now = Date.now();
-    if (now - player.lastShootTime < 170) return;
+    if (now - player.lastShootTime < 245) return;
     player.lastShootTime = now;
 
     const rot = isValidFiniteNumber(player.rotation) ? player.rotation : 0;
@@ -505,30 +505,30 @@ export class GameRoom extends Room<GameState> {
 
     enemy.type = chosenType;
     if (chosenType === "boss") {
-      enemy.hp = Math.round((440 + w * 160) * (isHard ? 1.4 : 1.0));
+      enemy.hp = Math.round((560 + w * 180) * (isHard ? 1.4 : 1.0));
       enemy.maxHp = enemy.hp;
-      enemy.speed = Math.round((82 + Math.min(42, w * 4)) * (isHard ? 1.14 : 1.0));
+      enemy.speed = Math.round((96 + Math.min(48, w * 4)) * (isHard ? 1.14 : 1.0));
       enemy.radius = 46;
-      enemy.damage = Math.round(34 * dmgScale);
+      enemy.damage = Math.round(36 * dmgScale);
       this.state.bossActive = true;
     } else if (chosenType === "tank") {
-      enemy.hp = Math.round(135 * hpScale);
+      enemy.hp = Math.round(185 * hpScale);
       enemy.maxHp = enemy.hp;
-      enemy.speed = Math.round(78 * spdScale);
+      enemy.speed = Math.round(92 * spdScale);
       enemy.radius = 30;
-      enemy.damage = Math.round(24 * dmgScale);
+      enemy.damage = Math.round(26 * dmgScale);
     } else if (chosenType === "fast") {
-      enemy.hp = Math.round(26 * hpScale);
+      enemy.hp = Math.round(38 * hpScale);
       enemy.maxHp = enemy.hp;
-      enemy.speed = Math.round(172 * spdScale);
+      enemy.speed = Math.round(202 * spdScale);
       enemy.radius = 15;
-      enemy.damage = Math.round(11 * dmgScale);
+      enemy.damage = Math.round(13 * dmgScale);
     } else {
-      enemy.hp = Math.round(48 * hpScale);
+      enemy.hp = Math.round(68 * hpScale);
       enemy.maxHp = enemy.hp;
-      enemy.speed = Math.round(115 * spdScale);
+      enemy.speed = Math.round(140 * spdScale);
       enemy.radius = 20;
-      enemy.damage = Math.round(15 * dmgScale);
+      enemy.damage = Math.round(17 * dmgScale);
     }
 
     if (typeof nearX === "number" && typeof nearY === "number") {
