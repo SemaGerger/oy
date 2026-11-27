@@ -52,6 +52,7 @@ export class GameScene extends Phaser.Scene {
   private enemyVisuals: Map<string, EnemyVisual> = new Map();
   private bulletVisuals: Map<string, BulletVisual> = new Map();
   private coinVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
+  private bombVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
   private obstacleVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
   private obstacleData: Map<string, { type: string; x: number; y: number; radius: number }> = new Map();
   private bushes: Array<{ x: number; y: number; img: Phaser.GameObjects.Image }> = [];
@@ -590,6 +591,31 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
+    // 4b. Bombs (touch to detonate; blast power depends on hero)
+    if (this.room.state.bombs && typeof this.room.state.bombs.onAdd === "function") {
+      this.room.state.bombs.onAdd((bomb: any, id: string) => {
+        if (this.bombVisuals.has(id)) return;
+        this.bombVisuals.set(id, this.createBombVisual(bomb));
+      });
+      this.room.state.bombs.onRemove((_bomb: any, id: string) => {
+        const visual = this.bombVisuals.get(id);
+        if (visual) {
+          visual.destroy();
+          this.bombVisuals.delete(id);
+        }
+      });
+    }
+
+    this.room.onMessage("bomb_blast", (data: unknown) => {
+      if (!data || typeof data !== "object") return;
+      const d = data as Record<string, unknown>;
+      const x = Number(d.x);
+      const y = Number(d.y);
+      const radius = Number(d.radius);
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radius)) return;
+      this.createBombBlastEffect(x, y, Math.max(40, Math.min(600, radius)));
+    });
+
     // 5. Obstacles (Rocks, Armored Bunker Walls, Energy Pillars)
     if (this.room.state.obstacles && typeof this.room.state.obstacles.onAdd === "function") {
       this.room.state.obstacles.onAdd((obs: any, id: string) => {
@@ -972,6 +998,45 @@ export class GameScene extends Phaser.Scene {
     });
 
     return container;
+  }
+
+  private createBombVisual(bomb: any): Phaser.GameObjects.Container {
+    const container = this.add.container(Number(bomb.x) || 0, Number(bomb.y) || 0);
+    container.setDepth(9);
+    const glow = this.add.circle(0, 0, 26, 0xef4444, 0.22);
+    glow.setStrokeStyle(2, 0xfbbf24, 0.7);
+    const body = this.add.circle(0, 0, 14, 0x1c1917, 1);
+    body.setStrokeStyle(3, 0x78716c, 1);
+    const shine = this.add.circle(-4, -4, 4, 0xe7e5e4, 0.7);
+    const fuse = this.add.rectangle(6, -16, 3, 8, 0xd97706, 1).setAngle(25);
+    const spark = this.add.circle(9, -21, 4, 0xfacc15, 1);
+    container.add([glow, body, shine, fuse, spark]);
+    this.tweens.add({
+      targets: glow,
+      scale: 1.4,
+      alpha: 0.08,
+      yoyo: true,
+      repeat: -1,
+      duration: 500,
+    });
+    return container;
+  }
+
+  private createBombBlastEffect(x: number, y: number, radius: number) {
+    const ring = this.add.circle(x, y, radius, 0xf97316, 0.35);
+    ring.setStrokeStyle(4, 0xfbbf24, 0.9);
+    ring.setDepth(26);
+    ring.setScale(0.15);
+    this.tweens.add({
+      targets: ring,
+      scale: 1,
+      alpha: 0,
+      duration: 360,
+      ease: "Cubic.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+    this.createExplosionEffect(x, y, 0xf97316);
+    this.cameras.main.shake(200, 0.006);
   }
 
   private createHitEffect(x: number, y: number, color: number) {

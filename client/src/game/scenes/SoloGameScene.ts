@@ -7,7 +7,6 @@ import {
   BOSS_SPRITE_KEYS,
   getHeroById,
   addPlayerXp,
-  saveHeroId,
 } from "../heroes";
 
 interface SoloObstacle {
@@ -49,6 +48,12 @@ interface SoloCoin {
   x: number;
   y: number;
   value: number;
+  container: Phaser.GameObjects.Container;
+}
+
+interface SoloBomb {
+  x: number;
+  y: number;
   container: Phaser.GameObjects.Container;
 }
 
@@ -97,6 +102,8 @@ export class SoloGameScene extends Phaser.Scene {
   private bullets: SoloBullet[] = [];
   private enemyBullets: SoloBullet[] = [];
   private coins: SoloCoin[] = [];
+  private bombs: SoloBomb[] = [];
+  private bombSpawnTimer = 0;
 
   // Controls (Drag Joystick + WASD)
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -230,6 +237,9 @@ export class SoloGameScene extends Phaser.Scene {
 
     for (let i = 0; i < 22; i++) {
       this.spawnCoin();
+    }
+    for (let i = 0; i < 3; i++) {
+      this.spawnBomb();
     }
     const initialEnemies = this.difficulty === "hard" ? 9 : 6;
     for (let i = 0; i < initialEnemies; i++) {
@@ -893,7 +903,7 @@ export class SoloGameScene extends Phaser.Scene {
       y,
       vx: Math.cos(this.playerRot) * speed,
       vy: Math.sin(this.playerRot) * speed,
-      damage: 20,
+      damage: Math.round(20 * getHeroById(this.heroId).damageMult),
       createdAt: now,
       container,
     });
@@ -970,6 +980,93 @@ export class SoloGameScene extends Phaser.Scene {
     });
   }
 
+  private onEnemyKilled(e: SoloEnemy) {
+    const baseReward =
+      e.type === "boss" ? 250 : e.type === "tank" ? 50 : e.type === "fast" ? 25 : 15;
+    const reward = this.difficulty === "hard" ? Math.round(baseReward * 1.5) : baseReward;
+    this.score += reward;
+    this.awardXp(reward);
+    this.kills += 1;
+    this.createDeathBurst(e.x, e.y, e.color, e.type === "boss" ? 14 : 6);
+    this.spawnFloatingText(
+      e.x,
+      e.y,
+      e.type === "boss" ? `👑 +${reward}` : `+${reward}`,
+      e.type === "boss" ? "#fbbf24" : "#fef08a"
+    );
+
+    if (e.type === "boss") {
+      this.cameras.main.shake(180, 0.005);
+      for (let k = 0; k < 5; k++) {
+        const ox = e.x + (Math.random() - 0.5) * 90;
+        const oy = e.y + (Math.random() - 0.5) * 90;
+        this.spawnCoin(ox, oy, 30);
+      }
+    } else {
+      this.spawnCoin(e.x, e.y, reward);
+    }
+
+    e.container.destroy();
+  }
+
+  private spawnBomb() {
+    if (this.bombs.length >= 4) return;
+    const pos = this.findSafePos(20);
+    const container = this.add.container(pos.x, pos.y);
+    container.setDepth(9);
+    const glow = this.add.circle(0, 0, 26, 0xef4444, 0.22);
+    glow.setStrokeStyle(2, 0xfbbf24, 0.7);
+    const body = this.add.circle(0, 0, 14, 0x1c1917, 1);
+    body.setStrokeStyle(3, 0x78716c, 1);
+    const shine = this.add.circle(-4, -4, 4, 0xe7e5e4, 0.7);
+    const fuse = this.add.rectangle(6, -16, 3, 8, 0xd97706, 1).setAngle(25);
+    const spark = this.add.circle(9, -21, 4, 0xfacc15, 1);
+    container.add([glow, body, shine, fuse, spark]);
+    this.bombs.push({ x: pos.x, y: pos.y, container });
+  }
+
+  /** Bomb blast: damage + radius scale with the equipped hero's blastMult. */
+  private detonateBomb(x: number, y: number) {
+    const hero = getHeroById(this.heroId);
+    const radius = Math.round(190 * hero.blastMult);
+    const damage = Math.round(140 * hero.blastMult);
+
+    const ring = this.add.circle(x, y, radius, 0xf97316, 0.35);
+    ring.setStrokeStyle(4, 0xfbbf24, 0.9);
+    ring.setDepth(26);
+    ring.setScale(0.15);
+    this.tweens.add({
+      targets: ring,
+      scale: 1,
+      alpha: 0,
+      duration: 360,
+      ease: "Cubic.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+    this.createDeathBurst(x, y, 0xf97316, 14);
+    this.cameras.main.shake(200, 0.008);
+
+    for (let j = this.enemies.length - 1; j >= 0; j--) {
+      const e = this.enemies[j];
+      if (Math.hypot(e.x - x, e.y - y) > radius + e.radius) continue;
+      e.hp -= damage;
+      e.hpBarFill.width = e.radius * 2 * Math.max(0, e.hp / e.maxHp);
+      if (e.hp <= 0) {
+        this.onEnemyKilled(e);
+        this.enemies.splice(j, 1);
+      }
+    }
+
+    for (let k = this.enemyBullets.length - 1; k >= 0; k--) {
+      const eb = this.enemyBullets[k];
+      if (Math.hypot(eb.x - x, eb.y - y) <= radius) {
+        eb.container.destroy();
+        this.enemyBullets.splice(k, 1);
+      }
+    }
+    this.spawnFloatingText(x, y - 10, "💥 BOOM!", "#fb923c");
+  }
+
   private awardXp(amount: number) {
     const { leveledUp, progress, unlockedHero } = addPlayerXp(amount);
     if (!leveledUp) return;
@@ -981,10 +1078,8 @@ export class SoloGameScene extends Phaser.Scene {
     this.createDeathBurst(this.playerX, this.playerY, 0xfbbf24, 12);
     this.spawnFloatingText(this.playerX, this.playerY - 22, `🎉 SEVİYE ${progress.level}!`, "#fbbf24");
 
-    if (unlockedHero && this.playerSprite && this.textures.exists(unlockedHero.spriteKey)) {
-      this.heroId = unlockedHero.id;
-      saveHeroId(unlockedHero.id);
-      this.playerSprite.setTexture(unlockedHero.spriteKey).setDisplaySize(60, 60);
+    // Yeni karakter yalnızca AÇILIR; oyuncu ana menüden kendisi seçer (anında değişmez).
+    if (unlockedHero) {
       this.isPausedForUnlock = true;
       this.isDragging = false;
       this.activePointerId = null;
@@ -1026,7 +1121,7 @@ export class SoloGameScene extends Phaser.Scene {
       this.spawnEnemy();
     }
 
-    if (this.waveTimer >= 25) {
+    if (this.waveTimer >= 40) {
       this.waveTimer = 0;
       this.wave += 1;
       const waveBurst = 4 + Math.min(4, Math.floor(this.wave / 2));
@@ -1161,6 +1256,24 @@ export class SoloGameScene extends Phaser.Scene {
       }
     }
 
+    // Bombs: touch one to detonate it (blast power depends on the hero)
+    if (!this.isDead) {
+      for (let i = this.bombs.length - 1; i >= 0; i--) {
+        const bomb = this.bombs[i];
+        bomb.container.setScale(1 + Math.sin(time * 0.008 + i) * 0.08);
+        if ((this.playerX - bomb.x) ** 2 + (this.playerY - bomb.y) ** 2 < 36 * 36) {
+          this.bombs.splice(i, 1);
+          bomb.container.destroy();
+          this.detonateBomb(bomb.x, bomb.y);
+        }
+      }
+    }
+    this.bombSpawnTimer += dt;
+    if (this.bombSpawnTimer >= 9) {
+      this.bombSpawnTimer = 0;
+      this.spawnBomb();
+    }
+
     // Update Player HP Bar & Score
     const hpRatio = Math.max(0, Math.min(1, this.playerHp / this.playerMaxHp));
     this.playerHpFill.width = 44 * hpRatio;
@@ -1203,32 +1316,7 @@ export class SoloGameScene extends Phaser.Scene {
             e.y += (b.vy / bLen) * kb;
 
             if (e.hp <= 0) {
-              const baseReward =
-                e.type === "boss" ? 250 : e.type === "tank" ? 50 : e.type === "fast" ? 25 : 15;
-              const reward = isHard ? Math.round(baseReward * 1.5) : baseReward;
-              this.score += reward;
-              this.awardXp(reward);
-              this.kills += 1;
-              this.createDeathBurst(e.x, e.y, e.color, e.type === "boss" ? 14 : 6);
-              this.spawnFloatingText(
-                e.x,
-                e.y,
-                e.type === "boss" ? `👑 +${reward}` : `+${reward}`,
-                e.type === "boss" ? "#fbbf24" : "#fef08a"
-              );
-
-              if (e.type === "boss") {
-                this.cameras.main.shake(180, 0.005);
-                for (let k = 0; k < 5; k++) {
-                  const ox = e.x + (Math.random() - 0.5) * 90;
-                  const oy = e.y + (Math.random() - 0.5) * 90;
-                  this.spawnCoin(ox, oy, 30);
-                }
-              } else {
-                this.spawnCoin(e.x, e.y, reward);
-              }
-
-              e.container.destroy();
+              this.onEnemyKilled(e);
               this.enemies.splice(j, 1);
             }
             break;

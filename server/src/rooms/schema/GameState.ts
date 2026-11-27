@@ -16,6 +16,19 @@ export class Coin extends Schema {
   }
 }
 
+export class Bomb extends Schema {
+  @type("string") declare id: string;
+  @type("number") declare x: number;
+  @type("number") declare y: number;
+
+  constructor() {
+    super();
+    this.id = "";
+    this.x = 0;
+    this.y = 0;
+  }
+}
+
 export class Obstacle extends Schema {
   @type("string") declare id: string;
   @type("string") declare type: string; // "rock" | "wall" | "pillar"
@@ -91,6 +104,7 @@ export class GameState extends Schema {
   @type({ map: Bullet }) declare bullets: MapSchema<Bullet>;
   @type({ map: Coin }) declare coins: MapSchema<Coin>;
   @type({ map: Obstacle }) declare obstacles: MapSchema<Obstacle>;
+  @type({ map: Bomb }) declare bombs: MapSchema<Bomb>;
 
   @type("number") declare mapWidth: number;
   @type("number") declare mapHeight: number;
@@ -108,6 +122,7 @@ export class GameState extends Schema {
     this.bullets = new MapSchema<Bullet>();
     this.coins = new MapSchema<Coin>();
     this.obstacles = new MapSchema<Obstacle>();
+    this.bombs = new MapSchema<Bomb>();
     this.mapWidth = 2200;
     this.mapHeight = 2200;
     this.gameMode = "coop";

@@ -1,4 +1,4 @@
-export interface HeroSkin {
+﻿export interface HeroSkin {
   id: string;
   name: string;
   tagline: string;
@@ -6,6 +6,10 @@ export interface HeroSkin {
   spritePath: string;
   accent: string;
   unlockLevel: number;
+  /** Mermi hasarı çarpanı */
+  damageMult: number;
+  /** Bomba yıkım gücü (hasar + patlama yarıçapı) çarpanı */
+  blastMult: number;
 }
 
 export const HERO_SKINS: HeroSkin[] = [
@@ -16,7 +20,7 @@ export const HERO_SKINS: HeroSkin[] = [
     spriteKey: "hero_slime_knight",
     spritePath: "/assets/sprites/hero_slime_knight.webp",
     accent: "#14b8a6",
-    unlockLevel: 1,
+    unlockLevel: 1, damageMult: 1, blastMult: 1,
   },
   {
     id: "cactus_cowboy",
@@ -25,7 +29,7 @@ export const HERO_SKINS: HeroSkin[] = [
     spriteKey: "hero_cactus_cowboy",
     spritePath: "/assets/sprites/hero_cactus_cowboy.webp",
     accent: "#22c55e",
-    unlockLevel: 2,
+    unlockLevel: 2, damageMult: 1.2, blastMult: 1.15,
   },
   {
     id: "astro_duck",
@@ -34,7 +38,7 @@ export const HERO_SKINS: HeroSkin[] = [
     spriteKey: "hero_astro_duck",
     spritePath: "/assets/sprites/hero_astro_duck.webp",
     accent: "#38bdf8",
-    unlockLevel: 3,
+    unlockLevel: 3, damageMult: 1.45, blastMult: 1.3,
   },
   {
     id: "samurai_frog",
@@ -43,7 +47,7 @@ export const HERO_SKINS: HeroSkin[] = [
     spriteKey: "hero_samurai_frog",
     spritePath: "/assets/sprites/hero_samurai_frog.webp",
     accent: "#ef4444",
-    unlockLevel: 4,
+    unlockLevel: 4, damageMult: 1.75, blastMult: 1.5,
   },
   {
     id: "steampunk_owl",
@@ -52,7 +56,7 @@ export const HERO_SKINS: HeroSkin[] = [
     spriteKey: "hero_steampunk_owl",
     spritePath: "/assets/sprites/hero_steampunk_owl.webp",
     accent: "#f59e0b",
-    unlockLevel: 5,
+    unlockLevel: 5, damageMult: 2.1, blastMult: 1.75,
   },
   {
     id: "cyber_cat",
@@ -61,12 +65,12 @@ export const HERO_SKINS: HeroSkin[] = [
     spriteKey: "hero_cyber_cat",
     spritePath: "/assets/sprites/hero_cyber_cat.webp",
     accent: "#06b6d4",
-    unlockLevel: 6,
+    unlockLevel: 6, damageMult: 2.5, blastMult: 2,
   },
 ];
 
-// Cumulative XP thresholds for Levels 1..6; beyond Level 6 each level is +1800 XP
-const LEVEL_XP_THRESHOLDS = [0, 450, 1100, 2100, 3500, 5500];
+// Cumulative XP thresholds for Levels 1..6; beyond Level 6 each level is +5000 XP
+const LEVEL_XP_THRESHOLDS = [0, 1800, 5000, 10000, 17000, 27000];
 
 const HERO_STORAGE_KEY = "sitecont_hero_skin";
 const XP_STORAGE_KEY = "sitecont_player_xp";
@@ -103,7 +107,7 @@ export function computeProgressFromXp(xp: number): PlayerProgress {
       nextThreshold =
         i + 1 < LEVEL_XP_THRESHOLDS.length
           ? LEVEL_XP_THRESHOLDS[i + 1]
-          : LEVEL_XP_THRESHOLDS[LEVEL_XP_THRESHOLDS.length - 1] + 1000;
+          : LEVEL_XP_THRESHOLDS[LEVEL_XP_THRESHOLDS.length - 1] + 5000;
     } else {
       nextThreshold = LEVEL_XP_THRESHOLDS[i];
       break;
@@ -112,10 +116,10 @@ export function computeProgressFromXp(xp: number): PlayerProgress {
 
   const maxFixed = LEVEL_XP_THRESHOLDS[LEVEL_XP_THRESHOLDS.length - 1];
   if (safeXp >= maxFixed) {
-    const extraLevels = Math.floor((safeXp - maxFixed) / 1000);
+    const extraLevels = Math.floor((safeXp - maxFixed) / 5000);
     level = LEVEL_XP_THRESHOLDS.length + extraLevels;
-    prevThreshold = maxFixed + extraLevels * 1000;
-    nextThreshold = prevThreshold + 1000;
+    prevThreshold = maxFixed + extraLevels * 5000;
+    nextThreshold = prevThreshold + 5000;
   }
 
   const span = Math.max(1, nextThreshold - prevThreshold);
@@ -212,3 +216,4 @@ export const BOSS_SPRITE_KEYS = [
   "boss_octo_king",
   "boss_magma_titan",
 ] as const;
+

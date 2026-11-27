@@ -268,7 +268,7 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
                 fontFamily: "inherit",
               }}
             >
-              🔥 Hemen Bu Karakterle Devam Et!
+              ✅ Devam Et (Karakteri ana menüden seçebilirsin)
             </button>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { Room, Client } from "@colyseus/core";
-import { GameState, Coin, Enemy, Bullet, Obstacle } from "./schema/GameState";
+import { GameState, Coin, Enemy, Bullet, Obstacle, Bomb } from "./schema/GameState";
 import { Player } from "./schema/Player";
 import { verifyAuthToken, AuthTokenPayload } from "../auth/authService";
 
@@ -7,6 +7,20 @@ const PLAYER_COLORS = [
   "#38bdf8", "#22c55e", "#eab308", "#f97316",
   "#ec4899", "#a855f7", "#06b6d4", "#10b981"
 ];
+
+/** Karakter başına hasar / bomba gücü çarpanları (sunucu tarafında sabit tablo). */
+const HERO_POWER: Record<string, { damageMult: number; blastMult: number }> = {
+  slime_knight: { damageMult: 1.0, blastMult: 1.0 },
+  cactus_cowboy: { damageMult: 1.2, blastMult: 1.15 },
+  astro_duck: { damageMult: 1.45, blastMult: 1.3 },
+  samurai_frog: { damageMult: 1.75, blastMult: 1.5 },
+  steampunk_owl: { damageMult: 2.1, blastMult: 1.75 },
+  cyber_cat: { damageMult: 2.5, blastMult: 2.0 },
+};
+
+function getHeroPower(skin: string): { damageMult: number; blastMult: number } {
+  return HERO_POWER[skin] ?? HERO_POWER.slime_knight;
+}
 
 function isValidFiniteNumber(val: unknown): val is number {
   return typeof val === "number" && Number.isFinite(val);
@@ -30,6 +44,8 @@ export class GameRoom extends Room<GameState> {
   private enemySpawnTimer = 0;
   private waveTimer = 0;
   private bossSummonTimer = 0;
+  private bombSpawnTimer = 0;
+  private nextBombId = 1;
   private nextBulletId = 1;
   private nextEnemyId = 1;
 
@@ -79,6 +95,10 @@ export class GameRoom extends Room<GameState> {
 
     for (let i = 0; i < 25; i++) {
       this.spawnCoin();
+    }
+
+    for (let i = 0; i < 3; i++) {
+      this.spawnBomb();
     }
 
     const initialEnemies = this.state.difficulty === "hard" ? 9 : 6;
@@ -446,7 +466,7 @@ export class GameRoom extends Room<GameState> {
     const bulletSpeed = 760;
     bullet.vx = Math.cos(rot) * bulletSpeed;
     bullet.vy = Math.sin(rot) * bulletSpeed;
-    bullet.damage = 20;
+    bullet.damage = Math.round(20 * getHeroPower(player.skin).damageMult);
     bullet.createdAt = now;
 
     this.state.bullets.set(bullet.id, bullet);
@@ -558,6 +578,79 @@ export class GameRoom extends Room<GameState> {
     this.state.enemies.set(enemy.id, enemy);
   }
 
+  private handleEnemyDeath(enemy: Enemy, enemyId: string, shooter: Player | undefined) {
+    const scoreMult = this.state.difficulty === "hard" ? 1.5 : 1.0;
+    const baseReward =
+      enemy.type === "boss"
+        ? 250
+        : enemy.type === "tank"
+          ? 55
+          : enemy.type === "fast"
+            ? 25
+            : 15;
+    const reward = Math.round(baseReward * scoreMult);
+    if (shooter) {
+      shooter.score += reward;
+      shooter.kills += 1;
+    }
+
+    if (enemy.type === "boss") {
+      // Jackpot drop of 5 healing/score orbs!
+      for (let k = 0; k < 5; k++) {
+        const a = (Math.PI * 2 * k) / 5;
+        this.spawnCoin(
+          enemy.x + Math.cos(a) * 34,
+          enemy.y + Math.sin(a) * 34,
+          Math.round(35 * scoreMult)
+        );
+      }
+      this.broadcast("system_notice", {
+        text: `🏆 ${shooter ? shooter.name : "Takım"} DEV BOSS'U YOK ETTİ! (+${reward} puan)`,
+      });
+    } else {
+      this.spawnCoin(enemy.x, enemy.y, reward);
+    }
+
+    this.state.enemies.delete(enemyId);
+
+    if (enemy.type === "boss") {
+      let stillHasBoss = false;
+      this.state.enemies.forEach((rem) => {
+        if (rem.type === "boss") stillHasBoss = true;
+      });
+      this.state.bossActive = stillHasBoss;
+    }
+  }
+
+  private spawnBomb() {
+    if (this.state.bombs.size >= 5) return;
+    const bomb = new Bomb();
+    bomb.id = `bm_${this.nextBombId++}`;
+    const pos = this.findSafePosition(20, false);
+    bomb.x = Math.floor(pos.x);
+    bomb.y = Math.floor(pos.y);
+    this.state.bombs.set(bomb.id, bomb);
+  }
+
+  /** Bomb blast: damage + radius scale with the detonating player's hero. */
+  private detonateBomb(x: number, y: number, owner: Player) {
+    const power = getHeroPower(owner.skin);
+    const radius = Math.round(190 * power.blastMult);
+    const damage = Math.round(140 * power.blastMult);
+
+    const victims: Array<[string, Enemy]> = [];
+    this.state.enemies.forEach((enemy, enemyId) => {
+      const d = Math.hypot(enemy.x - x, enemy.y - y);
+      if (d <= radius + enemy.radius) victims.push([enemyId, enemy]);
+    });
+    for (const [enemyId, enemy] of victims) {
+      enemy.hp -= damage;
+      if (enemy.hp <= 0) this.handleEnemyDeath(enemy, enemyId, owner);
+    }
+
+    this.broadcast("bomb_blast", { x, y, radius });
+  }
+
   private killPlayer(victim: Player, killerName: string) {
     victim.hp = 0;
     victim.isDead = true;
@@ -581,6 +674,11 @@ export class GameRoom extends Room<GameState> {
     if (this.state.players.size > 0) {
       this.enemySpawnTimer += dt;
       this.waveTimer += dt;
+      this.bombSpawnTimer += dt;
+      if (this.bombSpawnTimer >= 9) {
+        this.bombSpawnTimer = 0;
+        this.spawnBomb();
+      }
 
       const baseInterval = isHard ? 1.55 : 2.0;
       const minInterval = isHard ? 0.38 : 0.52;
@@ -609,8 +707,8 @@ export class GameRoom extends Room<GameState> {
         }
       }
 
-      // Advance wave every 25 seconds for brisk, exciting escalation
-      if (this.waveTimer >= 25) {
+      // Advance wave every 40 seconds (slower escalation)
+      if (this.waveTimer >= 40) {
         this.waveTimer = 0;
         this.state.wave += 1;
 
@@ -690,6 +788,20 @@ export class GameRoom extends Room<GameState> {
           coin.y += (dy / d) * 280 * dt;
         }
       });
+
+      // Bombs: touching one detonates it (server-authoritative blast)
+      const touchedBombs: string[] = [];
+      this.state.bombs.forEach((bomb, bombId) => {
+        const bx = player.x - bomb.x;
+        const by = player.y - bomb.y;
+        if (bx * bx + by * by < 36 * 36) touchedBombs.push(bombId);
+      });
+      for (const bombId of touchedBombs) {
+        const bomb = this.state.bombs.get(bombId);
+        if (!bomb) continue;
+        this.state.bombs.delete(bombId);
+        this.detonateBomb(bomb.x, bomb.y, player);
+      }
     });
 
     const bulletsToRemove: string[] = [];
@@ -732,48 +844,7 @@ export class GameRoom extends Room<GameState> {
             enemy.hp -= bullet.damage;
 
             if (enemy.hp <= 0) {
-              const scoreMult = isHard ? 1.5 : 1.0;
-              const baseReward =
-                enemy.type === "boss"
-                  ? 250
-                  : enemy.type === "tank"
-                    ? 55
-                    : enemy.type === "fast"
-                      ? 25
-                      : 15;
-              const reward = Math.round(baseReward * scoreMult);
-              const shooter = this.state.players.get(bullet.ownerId);
-              if (shooter) {
-                shooter.score += reward;
-                shooter.kills += 1;
-              }
-
-              if (enemy.type === "boss") {
-                // Jackpot drop of 5 healing/score orbs!
-                for (let k = 0; k < 5; k++) {
-                  const a = (Math.PI * 2 * k) / 5;
-                  this.spawnCoin(
-                    enemy.x + Math.cos(a) * 34,
-                    enemy.y + Math.sin(a) * 34,
-                    Math.round(35 * scoreMult)
-                  );
-                }
-                this.broadcast("system_notice", {
-                  text: `🏆 ${shooter ? shooter.name : "Takım"} DEV BOSS'U YOK ETTİ! (+${reward} puan)`,
-                });
-              } else {
-                this.spawnCoin(enemy.x, enemy.y, reward);
-              }
-
-              this.state.enemies.delete(enemyId);
-
-              if (enemy.type === "boss") {
-                let stillHasBoss = false;
-                this.state.enemies.forEach((rem) => {
-                  if (rem.type === "boss") stillHasBoss = true;
-                });
-                this.state.bossActive = stillHasBoss;
-              }
+              this.handleEnemyDeath(enemy, enemyId, this.state.players.get(bullet.ownerId));
             }
           }
         });
