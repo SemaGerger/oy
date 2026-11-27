@@ -1,7 +1,14 @@
 import Phaser from "phaser";
 import { EventBus } from "../EventBus";
 import { AppTheme, getSavedTheme } from "../../theme/ThemeContext";
-import { HERO_SKINS, getHeroById } from "../heroes";
+import {
+  HERO_SKINS,
+  WORLD_SPRITES,
+  BOSS_SPRITE_KEYS,
+  getHeroById,
+  addPlayerXp,
+  saveHeroId,
+} from "../heroes";
 
 interface SoloObstacle {
   type: "rock" | "wall" | "pillar";
@@ -23,6 +30,7 @@ interface SoloEnemy {
   color: number;
   container: Phaser.GameObjects.Container;
   bodyContainer: Phaser.GameObjects.Container;
+  sprite?: Phaser.GameObjects.Image;
   hpBarFill: Phaser.GameObjects.Rectangle;
 }
 
@@ -71,6 +79,7 @@ export class SoloGameScene extends Phaser.Scene {
   private waveTimer = 0;
   private spawnTimer = 0;
   private bossSummonTimer = 0;
+  private bossSpawnCount = 0;
 
   // Player visuals
   private playerContainer!: Phaser.GameObjects.Container;
@@ -81,6 +90,7 @@ export class SoloGameScene extends Phaser.Scene {
 
   // Entities
   private obstacles: SoloObstacle[] = [];
+  private bushes: Array<{ x: number; y: number; img: Phaser.GameObjects.Image }> = [];
   private enemies: SoloEnemy[] = [];
   private bullets: SoloBullet[] = [];
   private coins: SoloCoin[] = [];
@@ -120,6 +130,11 @@ export class SoloGameScene extends Phaser.Scene {
     for (const hero of HERO_SKINS) {
       if (!this.textures.exists(hero.spriteKey)) {
         this.load.image(hero.spriteKey, hero.spritePath);
+      }
+    }
+    for (const item of WORLD_SPRITES) {
+      if (!this.textures.exists(item.key)) {
+        this.load.image(item.key, item.path);
       }
     }
   }
@@ -456,12 +471,34 @@ export class SoloGameScene extends Phaser.Scene {
       this.obstacles.push({ type, x, y, radius, visual });
       count++;
     }
+    this.generateBushes();
+  }
+
+  private generateBushes() {
+    for (const b of this.bushes) b.img.destroy();
+    this.bushes = [];
+    if (!this.textures.exists("prop_bush")) return;
+
+    const isOffice = this.currentTheme === "office";
+    for (let i = 0; i < 10; i++) {
+      const pos = this.findSafePos(48);
+      const img = this.add
+        .image(pos.x, pos.y, "prop_bush")
+        .setDisplaySize(96, 96)
+        .setDepth(22)
+        .setVisible(!isOffice);
+      this.bushes.push({ x: pos.x, y: pos.y, img });
+    }
   }
 
   private rebuildObstacleVisuals() {
+    const isOffice = this.currentTheme === "office";
     for (const obs of this.obstacles) {
       obs.visual.destroy();
       obs.visual = this.createObstacleVisual(obs.type, obs.x, obs.y, obs.radius);
+    }
+    for (const b of this.bushes) {
+      b.img.setVisible(!isOffice);
     }
   }
 
@@ -496,6 +533,21 @@ export class SoloGameScene extends Phaser.Scene {
         const inner = this.add.circle(0, 0, r * 0.55, 0xe2e8f0, 0.9);
         container.add([node, inner]);
       }
+      return container;
+    }
+
+    const spriteKey =
+      type === "pillar" ? "prop_pillar" : type === "wall" ? "prop_barrier" : "prop_rock";
+    if (this.textures.exists(spriteKey)) {
+      const shadow = this.add.ellipse(4, r * 0.52, r * 1.9, r * 0.85, 0x000000, 0.38);
+      container.add(shadow);
+      if (type === "pillar") {
+        const aura = this.add.circle(0, -6, r * 1.15, 0xf59e0b, 0.14);
+        container.add(aura);
+      }
+      const scaleMult = type === "pillar" ? 2.45 : type === "wall" ? 2.35 : 2.25;
+      const img = this.add.image(0, -4, spriteKey).setDisplaySize(r * scaleMult, r * scaleMult);
+      container.add(img);
       return container;
     }
 
@@ -719,55 +771,70 @@ export class SoloGameScene extends Phaser.Scene {
 
     const bodyContainer = this.add.container(0, 0);
     const isBoss = type === "boss";
+    let sprite: Phaser.GameObjects.Image | undefined;
 
     if (isBoss) {
-      const aura = this.add.circle(0, 0, radius + 12, 0xf43f5e, 0.22);
-      aura.setStrokeStyle(2, 0xfbbf24, 0.65);
+      const aura = this.add.circle(0, 0, radius + 16, 0xf43f5e, 0.22);
+      aura.setStrokeStyle(2.5, 0xfbbf24, 0.7);
       bodyContainer.add(aura);
+      const bossKey = BOSS_SPRITE_KEYS[this.bossSpawnCount % BOSS_SPRITE_KEYS.length];
+      this.bossSpawnCount += 1;
+      if (this.textures.exists(bossKey)) {
+        const shadow = this.add.ellipse(0, radius * 0.75, radius * 1.8, radius * 0.65, 0x000000, 0.42);
+        sprite = this.add.image(0, -4, bossKey).setDisplaySize(128, 128);
+        bodyContainer.add([shadow, sprite]);
+      }
+    } else if (type === "tank" && this.textures.exists("enemy_tank")) {
+      const shadow = this.add.ellipse(0, radius * 0.72, radius * 1.65, radius * 0.6, 0x000000, 0.36);
+      sprite = this.add.image(0, -2, "enemy_tank").setDisplaySize(78, 78);
+      bodyContainer.add([shadow, sprite]);
     }
 
-    const clawScale = isBoss ? 1.9 : 1;
-    const leftClaw = this.add.triangle(
-      radius - 2,
-      -radius * 0.55,
-      0,
-      -5 * clawScale,
-      14 * clawScale,
-      0,
-      0,
-      5 * clawScale,
-      isBoss ? 0xfbbf24 : color
-    );
-    const rightClaw = this.add.triangle(
-      radius - 2,
-      radius * 0.55,
-      0,
-      -5 * clawScale,
-      14 * clawScale,
-      0,
-      0,
-      5 * clawScale,
-      isBoss ? 0xfbbf24 : color
-    );
-    const body = this.add.circle(0, 0, radius, color);
-    body.setStrokeStyle(isBoss ? 4.5 : 2.5, stroke);
-    const eyeSize = isBoss ? 6.5 : 3.5;
-    const eyeL = this.add.circle(radius * 0.35, -radius * 0.3, eyeSize, 0xfef08a);
-    const eyeR = this.add.circle(radius * 0.35, radius * 0.3, eyeSize, 0xfef08a);
-    bodyContainer.add([leftClaw, rightClaw, body, eyeL, eyeR]);
+    if (!sprite) {
+      const clawScale = isBoss ? 1.9 : 1;
+      const leftClaw = this.add.triangle(
+        radius - 2,
+        -radius * 0.55,
+        0,
+        -5 * clawScale,
+        14 * clawScale,
+        0,
+        0,
+        5 * clawScale,
+        isBoss ? 0xfbbf24 : color
+      );
+      const rightClaw = this.add.triangle(
+        radius - 2,
+        radius * 0.55,
+        0,
+        -5 * clawScale,
+        14 * clawScale,
+        0,
+        0,
+        5 * clawScale,
+        isBoss ? 0xfbbf24 : color
+      );
+      const body = this.add.circle(0, 0, radius, color);
+      body.setStrokeStyle(isBoss ? 4.5 : 2.5, stroke);
+      const eyeSize = isBoss ? 6.5 : 3.5;
+      const eyeL = this.add.circle(radius * 0.35, -radius * 0.3, eyeSize, 0xfef08a);
+      const eyeR = this.add.circle(radius * 0.35, radius * 0.3, eyeSize, 0xfef08a);
+      bodyContainer.add([leftClaw, rightClaw, body, eyeL, eyeR]);
+    }
 
     const barW = radius * 2;
     const barH = isBoss ? 8 : 4;
-    const hpBg = this.add.rectangle(0, -radius - 12, barW + 4, barH + 3, 0x0f172a, 0.9);
+    const barY = sprite ? -radius - 20 : -radius - 12;
+    const hpBg = this.add.rectangle(0, barY, barW + 4, barH + 3, 0x0f172a, 0.9);
     const hpBarFill = this.add
-      .rectangle(-barW / 2, -radius - 12, barW, barH, isBoss ? 0xfbbf24 : 0xef4444)
+      .rectangle(-barW / 2, barY, barW, barH, isBoss ? 0xfbbf24 : 0xef4444)
       .setOrigin(0, 0.5);
 
     container.add([bodyContainer, hpBg, hpBarFill]);
 
     if (isBoss) {
       const bossLabel = this.add
-        .text(0, -radius - 28, "DEV BOSS", {
+        .text(0, barY - 16, "DEV BOSS", {
           fontFamily: "sans-serif",
           fontSize: "12px",
           fontStyle: "bold",
@@ -791,6 +858,7 @@ export class SoloGameScene extends Phaser.Scene {
       color,
       container,
       bodyContainer,
+      sprite,
       hpBarFill,
     });
   }
@@ -872,6 +940,24 @@ export class SoloGameScene extends Phaser.Scene {
       ease: "Cubic.easeOut",
       onComplete: () => t.destroy(),
     });
+  }
+
+  private awardXp(amount: number) {
+    const { leveledUp, progress, unlockedHero } = addPlayerXp(amount);
+    if (!leveledUp) return;
+
+    EventBus.emit("level-up", {
+      level: progress.level,
+      unlockedHero,
+    });
+    this.createDeathBurst(this.playerX, this.playerY, 0xfbbf24, 12);
+    this.spawnFloatingText(this.playerX, this.playerY - 22, `🎉 SEVİYE ${progress.level}!`, "#fbbf24");
+
+    if (unlockedHero && this.playerSprite && this.textures.exists(unlockedHero.spriteKey)) {
+      this.heroId = unlockedHero.id;
+      saveHeroId(unlockedHero.id);
+      this.playerSprite.setTexture(unlockedHero.spriteKey).setDisplaySize(60, 60);
+    }
   }
 
   private emitHudStats() {
@@ -1027,6 +1113,7 @@ export class SoloGameScene extends Phaser.Scene {
         const cdSq = cdx * cdx + cdy * cdy;
         if (cdSq < 34 * 34) {
           this.score += c.value;
+          this.awardXp(c.value);
           this.playerHp = Math.min(this.playerMaxHp, this.playerHp + 8);
           c.container.destroy();
           this.coins.splice(i, 1);
@@ -1086,6 +1173,7 @@ export class SoloGameScene extends Phaser.Scene {
                 e.type === "boss" ? 250 : e.type === "tank" ? 50 : e.type === "fast" ? 25 : 15;
               const reward = isHard ? Math.round(baseReward * 1.5) : baseReward;
               this.score += reward;
+              this.awardXp(reward);
               this.kills += 1;
               this.createDeathBurst(e.x, e.y, e.color, e.type === "boss" ? 14 : 6);
               this.spawnFloatingText(
@@ -1127,7 +1215,12 @@ export class SoloGameScene extends Phaser.Scene {
         const angle = Math.atan2(this.playerY - e.y, this.playerX - e.x);
         e.x += Math.cos(angle) * e.speed * dt;
         e.y += Math.sin(angle) * e.speed * dt;
-        e.bodyContainer.rotation = angle;
+        if (e.sprite) {
+          e.sprite.setFlipX(Math.cos(angle) < 0);
+          e.sprite.y = (e.type === "boss" ? -4 : -2) + Math.sin(time * 0.012 + i) * 3;
+        } else {
+          e.bodyContainer.rotation = angle;
+        }
         this.resolveObstacleCollision(e, e.radius);
 
         const contactDist = e.radius + 20;
@@ -1166,6 +1259,14 @@ export class SoloGameScene extends Phaser.Scene {
       }
 
       e.container.setPosition(e.x, e.y);
+    }
+
+    // 5. Hiding bushes turn translucent when player steps inside
+    for (const b of this.bushes) {
+      if (!b.img.visible) continue;
+      const inside = (this.playerX - b.x) ** 2 + (this.playerY - b.y) ** 2 < 54 * 54;
+      const targetAlpha = inside ? 0.42 : 1;
+      b.img.alpha = Phaser.Math.Linear(b.img.alpha, targetAlpha, 0.18);
     }
 
     if (time - this.lastHudEmit > 120) {

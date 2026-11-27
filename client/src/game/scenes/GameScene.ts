@@ -2,7 +2,13 @@ import Phaser from "phaser";
 import { Room } from "colyseus.js";
 import { EventBus } from "../EventBus";
 import { AppTheme, getSavedTheme } from "../../theme/ThemeContext";
-import { HERO_SKINS, getHeroById } from "../heroes";
+import {
+  HERO_SKINS,
+  WORLD_SPRITES,
+  BOSS_SPRITE_KEYS,
+  getHeroById,
+  addPlayerXp,
+} from "../heroes";
 
 interface PlayerVisual {
   container: Phaser.GameObjects.Container;
@@ -22,6 +28,7 @@ interface PlayerVisual {
 interface EnemyVisual {
   container: Phaser.GameObjects.Container;
   bodyContainer: Phaser.GameObjects.Container;
+  sprite?: Phaser.GameObjects.Image;
   hpBarBg: Phaser.GameObjects.Rectangle;
   hpBarFill: Phaser.GameObjects.Rectangle;
   targetX: number;
@@ -47,6 +54,9 @@ export class GameScene extends Phaser.Scene {
   private coinVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
   private obstacleVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
   private obstacleData: Map<string, { type: string; x: number; y: number; radius: number }> = new Map();
+  private bushes: Array<{ x: number; y: number; img: Phaser.GameObjects.Image }> = [];
+  private bossSpawnCount = 0;
+  private lastTrackedScore = 0;
 
   private bgGraphics: Phaser.GameObjects.Graphics | null = null;
   private currentTheme: AppTheme = getSavedTheme();
@@ -94,6 +104,11 @@ export class GameScene extends Phaser.Scene {
     for (const hero of HERO_SKINS) {
       if (!this.textures.exists(hero.spriteKey)) {
         this.load.image(hero.spriteKey, hero.spritePath);
+      }
+    }
+    for (const item of WORLD_SPRITES) {
+      if (!this.textures.exists(item.key)) {
+        this.load.image(item.key, item.path);
       }
     }
   }
@@ -272,6 +287,7 @@ export class GameScene extends Phaser.Scene {
     this.mapH = this.room?.state?.mapHeight || 2200;
 
     this.drawBackground(this.mapW, this.mapH);
+    this.generateBushes();
     this.cameras.main.centerOn(this.mapW / 2, this.mapH / 2);
 
     const applyResponsiveZoom = () => {
@@ -301,13 +317,45 @@ export class GameScene extends Phaser.Scene {
     EventBus.emit("current-scene-ready", this);
   }
 
+  private generateBushes() {
+    for (const b of this.bushes) b.img.destroy();
+    this.bushes = [];
+    if (!this.textures.exists("prop_bush")) return;
+
+    const isOffice = this.currentTheme === "office";
+    const spots = [
+      [420, 460],
+      [1760, 480],
+      [460, 1740],
+      [1740, 1720],
+      [1100, 360],
+      [1100, 1840],
+      [360, 1100],
+      [1840, 1100],
+      [780, 820],
+      [1420, 1380],
+    ];
+    for (const [bx, by] of spots) {
+      const img = this.add
+        .image(bx, by, "prop_bush")
+        .setDisplaySize(96, 96)
+        .setDepth(22)
+        .setVisible(!isOffice);
+      this.bushes.push({ x: bx, y: by, img });
+    }
+  }
+
   private rebuildObstacleVisuals() {
+    const isOffice = this.currentTheme === "office";
     this.obstacleVisuals.forEach((v) => v.destroy());
     this.obstacleVisuals.clear();
     this.obstacleData.forEach((obs, id) => {
       const visual = this.createObstacleVisual(obs);
       this.obstacleVisuals.set(id, visual);
     });
+    for (const b of this.bushes) {
+      b.img.setVisible(!isOffice);
+    }
   }
 
   private drawBackground(mapW: number, mapH: number) {
@@ -606,7 +654,27 @@ export class GameScene extends Phaser.Scene {
       return container;
     }
 
-    // Dark Fun Mode: Ground drop shadow for 3D depth
+    // Dark Fun Mode: Hand-drawn WebP arena props
+    const spriteKey =
+      obs.type === "pillar"
+        ? "prop_pillar"
+        : obs.type === "wall"
+          ? "prop_barrier"
+          : "prop_rock";
+    if (this.textures.exists(spriteKey)) {
+      const shadow = this.add.ellipse(4, r * 0.52, r * 1.9, r * 0.85, 0x000000, 0.38);
+      container.add(shadow);
+      if (obs.type === "pillar") {
+        const aura = this.add.circle(0, -6, r * 1.15, 0xf59e0b, 0.14);
+        container.add(aura);
+      }
+      const scaleMult = obs.type === "pillar" ? 2.45 : obs.type === "wall" ? 2.35 : 2.25;
+      const img = this.add.image(0, -4, spriteKey).setDisplaySize(r * scaleMult, r * scaleMult);
+      container.add(img);
+      return container;
+    }
+
+    // Fallback procedural shapes
     const shadow = this.add.circle(6, 8, r + 3, 0x000000, 0.45);
     container.add(shadow);
 
@@ -767,9 +835,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     const bodyContainer = this.add.container(0, 0);
+    let sprite: Phaser.GameObjects.Image | undefined;
 
     if (isBoss) {
-      const aura = this.add.circle(0, 0, radius + 12, 0xdc2626, 0.22);
+      const aura = this.add.circle(0, 0, radius + 16, 0xdc2626, 0.22);
+      aura.setStrokeStyle(2.5, 0xfbbf24, 0.7);
       bodyContainer.add(aura);
       this.tweens.add({
         targets: aura,
@@ -779,45 +849,60 @@ export class GameScene extends Phaser.Scene {
         repeat: -1,
         duration: 850,
       });
+
+      const bossKey = BOSS_SPRITE_KEYS[this.bossSpawnCount % BOSS_SPRITE_KEYS.length];
+      this.bossSpawnCount += 1;
+      if (this.textures.exists(bossKey)) {
+        const shadow = this.add.ellipse(0, radius * 0.75, radius * 1.8, radius * 0.65, 0x000000, 0.42);
+        sprite = this.add.image(0, -4, bossKey).setDisplaySize(128, 128);
+        bodyContainer.add([shadow, sprite]);
+      }
+    } else if (enemy.type === "tank" && this.textures.exists("enemy_tank")) {
+      const shadow = this.add.ellipse(0, radius * 0.72, radius * 1.65, radius * 0.6, 0x000000, 0.36);
+      sprite = this.add.image(0, -2, "enemy_tank").setDisplaySize(78, 78);
+      bodyContainer.add([shadow, sprite]);
     }
 
-    // Claws / Spikes pointing forward
-    const clawLen = isBoss ? 24 : 14;
-    const clawHalf = isBoss ? 9 : 5;
-    const leftClaw = this.add.triangle(radius - 2, -radius * 0.55, 0, -clawHalf, clawLen, 0, 0, clawHalf, isBoss ? 0xfbbf24 : color);
-    const rightClaw = this.add.triangle(radius - 2, radius * 0.55, 0, -clawHalf, clawLen, 0, 0, clawHalf, isBoss ? 0xfbbf24 : color);
-    leftClaw.setStrokeStyle(1.5, 0x000000);
-    rightClaw.setStrokeStyle(1.5, 0x000000);
+    if (!sprite) {
+      // Claws / Spikes pointing forward
+      const clawLen = isBoss ? 24 : 14;
+      const clawHalf = isBoss ? 9 : 5;
+      const leftClaw = this.add.triangle(radius - 2, -radius * 0.55, 0, -clawHalf, clawLen, 0, 0, clawHalf, isBoss ? 0xfbbf24 : color);
+      const rightClaw = this.add.triangle(radius - 2, radius * 0.55, 0, -clawHalf, clawLen, 0, 0, clawHalf, isBoss ? 0xfbbf24 : color);
+      leftClaw.setStrokeStyle(1.5, 0x000000);
+      rightClaw.setStrokeStyle(1.5, 0x000000);
 
-    const body = this.add.circle(0, 0, radius, color);
-    body.setStrokeStyle(isBoss ? 4.5 : 2.5, strokeColor);
+      const body = this.add.circle(0, 0, radius, color);
+      body.setStrokeStyle(isBoss ? 4.5 : 2.5, strokeColor);
 
-    if (isBoss) {
-      const innerArmor = this.add.circle(0, 0, radius * 0.58, 0x7f1d1d, 1);
-      innerArmor.setStrokeStyle(2, 0xf59e0b, 0.8);
-      bodyContainer.add(innerArmor);
+      if (isBoss) {
+        const innerArmor = this.add.circle(0, 0, radius * 0.58, 0x7f1d1d, 1);
+        innerArmor.setStrokeStyle(2, 0xf59e0b, 0.8);
+        bodyContainer.add(innerArmor);
+      }
+
+      // Angry eyes
+      const eyeSize = isBoss ? 6 : 3.5;
+      const eyeLeft = this.add.circle(radius * 0.35, -radius * 0.3, eyeSize, 0xfef08a);
+      const eyeRight = this.add.circle(radius * 0.35, radius * 0.3, eyeSize, 0xfef08a);
+
+      bodyContainer.add([leftClaw, rightClaw, body, eyeLeft, eyeRight]);
     }
-
-    // Angry eyes
-    const eyeSize = isBoss ? 6 : 3.5;
-    const eyeLeft = this.add.circle(radius * 0.35, -radius * 0.3, eyeSize, 0xfef08a);
-    const eyeRight = this.add.circle(radius * 0.35, radius * 0.3, eyeSize, 0xfef08a);
-
-    bodyContainer.add([leftClaw, rightClaw, body, eyeLeft, eyeRight]);
 
     // Enemy HP Bar
     const barW = radius * 2;
     const barH = isBoss ? 9 : 6;
-    const hpBarBg = this.add.rectangle(0, -radius - 12, barW + 4, barH, 0x0f172a, 0.88);
+    const barY = sprite ? -radius - 20 : -radius - 12;
+    const hpBarBg = this.add.rectangle(0, barY, barW + 4, barH, 0x0f172a, 0.88);
     const hpBarFill = this.add
-      .rectangle(-barW / 2, -radius - 12, barW, barH - 2, isBoss ? 0xf59e0b : 0xef4444)
+      .rectangle(-barW / 2, barY, barW, barH - 2, isBoss ? 0xf59e0b : 0xef4444)
       .setOrigin(0, 0.5);
 
     container.add([bodyContainer, hpBarBg, hpBarFill]);
 
     if (isBoss) {
       const bossLabel = this.add
-        .text(0, -radius - 26, "DEV BOSS", {
+        .text(0, barY - 16, "DEV BOSS", {
           fontFamily: "sans-serif",
           fontSize: "12px",
           fontStyle: "bold",
@@ -832,12 +917,13 @@ export class GameScene extends Phaser.Scene {
     return {
       container,
       bodyContainer,
+      sprite,
       hpBarBg,
       hpBarFill,
       targetX: enemy.x,
       targetY: enemy.y,
       targetRotation: enemy.rotation || 0,
-      maxHp: enemy.maxHp || 40,
+      maxHp: enemy.maxHp || 50,
       radius,
       color,
     };
@@ -934,17 +1020,30 @@ export class GameScene extends Phaser.Scene {
     }> = [];
 
     this.room.state.players.forEach((p: any, sessionId: string) => {
+      const isLocal = sessionId === this.room?.sessionId;
+      const scoreVal = p.score || 0;
+      if (isLocal && scoreVal > this.lastTrackedScore) {
+        const delta = scoreVal - this.lastTrackedScore;
+        this.lastTrackedScore = scoreVal;
+        const { leveledUp, progress, unlockedHero } = addPlayerXp(delta);
+        if (leveledUp) {
+          EventBus.emit("level-up", {
+            level: progress.level,
+            unlockedHero,
+          });
+        }
+      }
       list.push({
         id: sessionId,
         name: p.name,
-        score: p.score || 0,
+        score: scoreVal,
         kills: p.kills || 0,
         hp: p.hp ?? 100,
         maxHp: p.maxHp ?? 100,
         isDead: Boolean(p.isDead),
         respawnTimer: p.respawnTimer || 0,
         color: p.color,
-        isLocal: sessionId === this.room?.sessionId,
+        isLocal,
       });
     });
 
@@ -984,8 +1083,25 @@ export class GameScene extends Phaser.Scene {
     this.enemyVisuals.forEach((visual) => {
       visual.container.x = Phaser.Math.Linear(visual.container.x, visual.targetX, 0.28);
       visual.container.y = Phaser.Math.Linear(visual.container.y, visual.targetY, 0.28);
-      visual.bodyContainer.rotation = visual.targetRotation;
+      if (visual.sprite) {
+        visual.sprite.setFlipX(Math.cos(visual.targetRotation) < 0);
+        visual.sprite.y = -3 + Math.sin(this.time.now * 0.012) * 3;
+      } else {
+        visual.bodyContainer.rotation = visual.targetRotation;
+      }
     });
+
+    // 2b. Hiding bushes turn translucent when local player steps inside
+    const localVisual = this.room ? this.playerVisuals.get(this.room.sessionId) : undefined;
+    if (localVisual) {
+      const lx = localVisual.container.x;
+      const ly = localVisual.container.y;
+      for (const b of this.bushes) {
+        if (!b.img.visible) continue;
+        const inside = (lx - b.x) ** 2 + (ly - b.y) ** 2 < 54 * 54;
+        b.img.alpha = Phaser.Math.Linear(b.img.alpha, inside ? 0.42 : 1, 0.18);
+      }
+    }
 
     // 3. Interpolate Bullets
     this.bulletVisuals.forEach((visual) => {

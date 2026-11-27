@@ -32,6 +32,11 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dashReadyAt, setDashReadyAt] = useState(0);
   const [nowTick, setNowTick] = useState(() => Date.now());
+  const [levelToast, setLevelToast] = useState<{
+    level: number;
+    heroName?: string;
+    heroSprite?: string;
+  } | null>(null);
   const [stats, setStats] = useState<SoloStats>({
     wave: 1,
     enemyCount: 6,
@@ -80,11 +85,28 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
       setNowTick(Date.now());
     };
 
+    let toastTimer: number | undefined;
+    const onLevelUp = (payload: {
+      level: number;
+      unlockedHero?: { name: string; spritePath: string } | null;
+    }) => {
+      setLevelToast({
+        level: payload.level,
+        heroName: payload.unlockedHero?.name,
+        heroSprite: payload.unlockedHero?.spritePath,
+      });
+      if (toastTimer) window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => setLevelToast(null), 4500);
+    };
+
     EventBus.on("solo-stats-updated", onStats);
     EventBus.on("dash-cooldown", onDashCooldown);
+    EventBus.on("level-up", onLevelUp);
     return () => {
+      if (toastTimer) window.clearTimeout(toastTimer);
       EventBus.off("solo-stats-updated", onStats);
       EventBus.off("dash-cooldown", onDashCooldown);
+      EventBus.off("level-up", onLevelUp);
     };
   }, []);
 
@@ -109,6 +131,45 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
 
   return (
     <div style={styles.overlay}>
+      {levelToast && (
+        <div
+          style={{
+            position: "absolute",
+            top: isMobile ? "82px" : "96px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: isOffice ? "#ffffff" : "rgba(24, 24, 27, 0.96)",
+            border: "2px solid #fbbf24",
+            color: isOffice ? "#0f172a" : "#fef3c7",
+            borderRadius: "16px",
+            padding: "8px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            boxShadow: "0 10px 28px rgba(0,0,0,0.4)",
+            zIndex: 55,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {levelToast.heroSprite && (
+            <img
+              src={levelToast.heroSprite}
+              alt={levelToast.heroName || "Yeni Karakter"}
+              style={{ width: "38px", height: "38px", objectFit: "contain" }}
+            />
+          )}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={{ fontSize: "12px", fontWeight: 900, color: "#fbbf24" }}>
+              🎉 SEVİYE {levelToast.level}!
+            </span>
+            <span style={{ fontSize: "11px", fontWeight: 700 }}>
+              {levelToast.heroName
+                ? `Yeni Karakter Açıldı: ${levelToast.heroName}`
+                : "Harika gidiyorsun!"}
+            </span>
+          </div>
+        </div>
+      )}
       {stats.bossActive && !stats.isDead && (
         <div
           style={{

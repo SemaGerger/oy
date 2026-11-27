@@ -11,7 +11,13 @@ import {
 } from "lucide-react";
 import { JoinOptions } from "../network/client";
 import { AuthUser } from "../network/authClient";
-import { HERO_SKINS, getSavedHeroId, saveHeroId } from "../game/heroes";
+import {
+  HERO_SKINS,
+  getSavedHeroId,
+  saveHeroId,
+  getPlayerProgress,
+  isHeroUnlocked,
+} from "../game/heroes";
 
 interface LoginScreenProps {
   user: AuthUser;
@@ -33,8 +39,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [gameMode, setGameMode] = useState<"coop" | "pvp">("coop");
   const [difficulty, setDifficulty] = useState<"medium" | "hard">("medium");
   const [selectedSkin, setSelectedSkin] = useState<string>(() => getSavedHeroId());
+  const [lockNotice, setLockNotice] = useState<string | null>(null);
   const [roomCode, setRoomCode] = useState("");
   const [joinTab, setJoinTab] = useState<"public" | "friend">("public");
+  const progress = getPlayerProgress();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -45,7 +53,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   }, []);
 
-  const handleSelectSkin = (id: string) => {
+  const handleSelectSkin = (id: string, unlockLevel: number, heroName: string) => {
+    if (!isHeroUnlocked(id, progress.level)) {
+      setLockNotice(`🔒 ${heroName} Seviye ${unlockLevel}'de açılır! (Şu an: Lv.${progress.level})`);
+      return;
+    }
+    setLockNotice(null);
     setSelectedSkin(id);
     saveHeroId(id);
   };
@@ -88,12 +101,39 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           <span style={{ color: "#18181b", fontWeight: 800, fontSize: "13px" }}>
             {user.username}
           </span>
+          <span
+            style={{
+              marginLeft: "auto",
+              fontSize: "11px",
+              fontWeight: 800,
+              color: "#b45309",
+              backgroundColor: "#fef3c7",
+              padding: "2px 8px",
+              borderRadius: "999px",
+            }}
+          >
+            ⭐ Lv.{progress.level}
+          </span>
         </div>
 
         <form onSubmit={(e) => handleSubmit(e, false)} style={styles.form}>
           {/* Hero Character Selector */}
           <div>
-            <label style={styles.label}>Karakterini Seç</label>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "6px",
+              }}
+            >
+              <label style={{ ...styles.label, marginBottom: 0 }}>
+                Karakterini Seç (Level atladıkça açılır)
+              </label>
+              <span style={{ fontSize: "11px", fontWeight: 700, color: "#71717a" }}>
+                {progress.currentLevelXp}/{progress.nextLevelXp} XP
+              </span>
+            </div>
             <div
               style={{
                 display: "grid",
@@ -102,36 +142,65 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               }}
             >
               {HERO_SKINS.map((hero) => {
-                const active = selectedSkin === hero.id;
+                const unlocked = isHeroUnlocked(hero.id, progress.level);
+                const active = unlocked && selectedSkin === hero.id;
                 return (
                   <button
                     key={hero.id}
                     type="button"
-                    onClick={() => handleSelectSkin(hero.id)}
-                    title={hero.name}
+                    onClick={() => handleSelectSkin(hero.id, hero.unlockLevel, hero.name)}
+                    title={
+                      unlocked
+                        ? hero.name
+                        : `${hero.name} — Seviye ${hero.unlockLevel}'de açılır`
+                    }
                     style={{
+                      position: "relative",
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
                       gap: "3px",
                       padding: "5px 3px",
                       borderRadius: "10px",
-                      cursor: "pointer",
+                      cursor: unlocked ? "pointer" : "not-allowed",
                       border: active ? `2px solid ${hero.accent}` : "1.5px solid #e4e4e7",
-                      backgroundColor: active ? "#f4f4f5" : "#ffffff",
+                      backgroundColor: active ? "#f4f4f5" : unlocked ? "#ffffff" : "#f4f4f5",
                       fontFamily: "inherit",
+                      opacity: unlocked ? 1 : 0.7,
                     }}
                   >
                     <img
                       src={hero.spritePath}
                       alt={hero.name}
-                      style={{ width: "38px", height: "38px", objectFit: "contain" }}
+                      style={{
+                        width: "38px",
+                        height: "38px",
+                        objectFit: "contain",
+                        filter: unlocked ? "none" : "grayscale(90%) brightness(0.8)",
+                      }}
                     />
+                    {!unlocked && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: "3px",
+                          right: "3px",
+                          fontSize: "8px",
+                          fontWeight: 800,
+                          backgroundColor: "#18181b",
+                          color: "#fbbf24",
+                          borderRadius: "5px",
+                          padding: "1px 4px",
+                        }}
+                      >
+                        🔒{hero.unlockLevel}
+                      </span>
+                    )}
                     <span
                       style={{
                         fontSize: "9px",
                         fontWeight: active ? 800 : 600,
-                        color: "#18181b",
+                        color: unlocked ? "#18181b" : "#71717a",
                         textAlign: "center",
                         lineHeight: 1.1,
                         maxWidth: "100%",
@@ -140,12 +209,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {hero.name.split(" ")[0]}
+                      {unlocked ? hero.name.split(" ")[0] : `Lv.${hero.unlockLevel}`}
                     </span>
                   </button>
                 );
               })}
             </div>
+            {lockNotice && (
+              <div style={{ fontSize: "11px", color: "#b45309", fontWeight: 700, marginTop: "6px" }}>
+                {lockNotice}
+              </div>
+            )}
           </div>
           {/* Game Mode Selection */}
           <div>

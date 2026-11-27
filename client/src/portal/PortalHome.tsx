@@ -17,7 +17,13 @@ import {
 import { GAMES_REGISTRY } from "./gamesRegistry";
 import { AuthUser } from "../network/authClient";
 import { useTheme } from "../theme/ThemeContext";
-import { HERO_SKINS, getSavedHeroId, saveHeroId } from "../game/heroes";
+import {
+  HERO_SKINS,
+  getSavedHeroId,
+  saveHeroId,
+  getPlayerProgress,
+  isHeroUnlocked,
+} from "../game/heroes";
 
 interface PortalHomeProps {
   user: AuthUser | null;
@@ -40,9 +46,16 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
   const { isOffice, setTheme } = useTheme();
   const [soloDifficulty, setSoloDifficulty] = useState<"medium" | "hard">("medium");
   const [selectedHeroId, setSelectedHeroId] = useState<string>(() => getSavedHeroId());
+  const [lockNotice, setLockNotice] = useState<string | null>(null);
+  const progress = getPlayerProgress();
   const firstGame = GAMES_REGISTRY[0];
 
-  const handlePickHero = (id: string) => {
+  const handlePickHero = (id: string, unlockLevel: number, heroName: string) => {
+    if (!isHeroUnlocked(id, progress.level)) {
+      setLockNotice(`🔒 ${heroName} için Seviye ${unlockLevel} olmalısın! (Şu an: Lv.${progress.level})`);
+      return;
+    }
+    setLockNotice(null);
     setSelectedHeroId(id);
     saveHeroId(id);
   };
@@ -269,36 +282,90 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                 <Link2 size={14} color={isOffice ? "#64748b" : "#f59e0b"} /> Oda Koduyla Davet
               </span>
             </div>
-            {/* Character / Hero Skin Picker */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "4px" }}>
-              <span
+            {/* Character / Hero Skin Picker + Level Progression */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "7px", marginTop: "4px" }}>
+              <div
                 style={{
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  color: isOffice ? "#475569" : "#d6d3d1",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "10px",
+                  flexWrap: "wrap",
                 }}
               >
-                {isOffice ? "Profil Simgesi:" : "Karakterini Seç:"}
-              </span>
+                <span
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    color: isOffice ? "#475569" : "#d6d3d1",
+                  }}
+                >
+                  {isOffice ? "Profil Simgesi:" : "Karakterler (Level atladıkça açılır):"}
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 800,
+                      padding: "2px 8px",
+                      borderRadius: "999px",
+                      backgroundColor: isOffice ? "#eff6ff" : "rgba(251, 191, 36, 0.18)",
+                      color: isOffice ? "#1d4ed8" : "#fbbf24",
+                    }}
+                  >
+                    ⭐ Seviye {progress.level}
+                  </span>
+                  <div
+                    style={{
+                      width: "76px",
+                      height: "7px",
+                      borderRadius: "999px",
+                      backgroundColor: isOffice ? "#e2e8f0" : "rgba(255,255,255,0.12)",
+                      overflow: "hidden",
+                    }}
+                    title={`${progress.currentLevelXp} / ${progress.nextLevelXp} XP`}
+                  >
+                    <div
+                      style={{
+                        width: `${Math.round(progress.progressRatio * 100)}%`,
+                        height: "100%",
+                        backgroundColor: isOffice ? "#2563eb" : "#fbbf24",
+                        borderRadius: "999px",
+                      }}
+                    />
+                  </div>
+                  <span style={{ fontSize: "10px", fontWeight: 700, color: isOffice ? "#64748b" : "#a8a29e" }}>
+                    {progress.currentLevelXp}/{progress.nextLevelXp} XP
+                  </span>
+                </div>
+              </div>
+
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 {HERO_SKINS.map((hero) => {
-                  const active = selectedHeroId === hero.id;
+                  const unlocked = isHeroUnlocked(hero.id, progress.level);
+                  const active = unlocked && selectedHeroId === hero.id;
                   return (
                     <button
                       key={hero.id}
                       type="button"
-                      onClick={() => handlePickHero(hero.id)}
-                      title={hero.name}
+                      onClick={() => handlePickHero(hero.id, hero.unlockLevel, hero.name)}
+                      title={
+                        unlocked
+                          ? hero.name
+                          : `${hero.name} — Seviye ${hero.unlockLevel}'de açılır`
+                      }
                       style={{
+                        position: "relative",
                         display: "flex",
                         flexDirection: "column",
                         alignItems: "center",
                         gap: "3px",
                         padding: "5px 7px",
                         borderRadius: "12px",
-                        cursor: "pointer",
+                        cursor: unlocked ? "pointer" : "not-allowed",
                         fontFamily: "inherit",
-                        minWidth: "60px",
+                        minWidth: "62px",
+                        opacity: unlocked ? 1 : 0.65,
                         border: active
                           ? `2px solid ${hero.accent}`
                           : isOffice
@@ -307,10 +374,10 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                         backgroundColor: active
                           ? isOffice
                             ? "#eff6ff"
-                            : "rgba(255,255,255,0.12)"
+                            : "rgba(255,255,255,0.14)"
                           : isOffice
                             ? "#f8fafc"
-                            : "rgba(0,0,0,0.22)",
+                            : "rgba(0,0,0,0.24)",
                         transform: active ? "translateY(-2px)" : "none",
                         transition: "transform 0.12s ease, border-color 0.12s ease",
                       }}
@@ -318,22 +385,61 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                       <img
                         src={hero.spritePath}
                         alt={hero.name}
-                        style={{ width: "42px", height: "42px", objectFit: "contain" }}
+                        style={{
+                          width: "42px",
+                          height: "42px",
+                          objectFit: "contain",
+                          filter: unlocked ? "none" : "grayscale(90%) brightness(0.75)",
+                        }}
                       />
+                      {!unlocked && (
+                        <span
+                          style={{
+                            position: "absolute",
+                            top: "3px",
+                            right: "3px",
+                            fontSize: "9px",
+                            fontWeight: 800,
+                            backgroundColor: "rgba(0,0,0,0.78)",
+                            color: "#fbbf24",
+                            borderRadius: "6px",
+                            padding: "1px 4px",
+                          }}
+                        >
+                          🔒{hero.unlockLevel}
+                        </span>
+                      )}
                       <span
                         style={{
                           fontSize: "10px",
                           fontWeight: active ? 800 : 600,
-                          color: isOffice ? "#0f172a" : "#fafaf9",
+                          color: unlocked
+                            ? isOffice
+                              ? "#0f172a"
+                              : "#fafaf9"
+                            : isOffice
+                              ? "#64748b"
+                              : "#a8a29e",
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {hero.name.split(" ")[0]}
+                        {unlocked ? hero.name.split(" ")[0] : `Lv.${hero.unlockLevel}`}
                       </span>
                     </button>
                   );
                 })}
               </div>
+              {lockNotice && (
+                <div
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    color: isOffice ? "#b45309" : "#fde047",
+                  }}
+                >
+                  {lockNotice}
+                </div>
+              )}
             </div>
 
             {/* Solo Difficulty Selector */}
