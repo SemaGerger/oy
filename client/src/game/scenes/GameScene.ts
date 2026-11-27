@@ -87,6 +87,7 @@ export class GameScene extends Phaser.Scene {
   private joyBase: Phaser.GameObjects.Arc | null = null;
   private joyThumb: Phaser.GameObjects.Arc | null = null;
   private lastDashTrigger = 0;
+  private lastBombTrigger = 0;
 
   constructor(room?: Room) {
     super("GameScene");
@@ -168,6 +169,17 @@ export class GameScene extends Phaser.Scene {
     }
   };
 
+  private handleTriggerBomb = () => {
+    if (!this.room) return;
+    const localPlayer = this.room.state?.players?.get?.(this.room.sessionId);
+    if (!localPlayer || localPlayer.isDead || (Number(localPlayer.bombs) || 0) <= 0) return;
+    const now = Date.now();
+    if (now - this.lastBombTrigger < 550) return;
+    this.lastBombTrigger = now;
+    this.room.send("use_bomb");
+    EventBus.emit("bomb-cooldown", { durationMs: 550 });
+  };
+
   create() {
     this.input.addPointer(2);
 
@@ -182,6 +194,8 @@ export class GameScene extends Phaser.Scene {
       }) as any;
       this.input.keyboard.on("keydown-SPACE", this.handleTriggerDash);
       this.input.keyboard.on("keydown-SHIFT", this.handleTriggerDash);
+      this.input.keyboard.on("keydown-E", this.handleTriggerBomb);
+      this.input.keyboard.on("keydown-B", this.handleTriggerBomb);
     }
 
     // Floating virtual joystick visual (zoom-compensated screen-space)
@@ -304,11 +318,15 @@ export class GameScene extends Phaser.Scene {
 
     EventBus.on("theme-changed", this.handleThemeChanged);
     EventBus.on("trigger-dash", this.handleTriggerDash);
+    EventBus.on("trigger-bomb", this.handleTriggerBomb);
     const cleanup = () => {
       EventBus.off("theme-changed", this.handleThemeChanged);
       EventBus.off("trigger-dash", this.handleTriggerDash);
+      EventBus.off("trigger-bomb", this.handleTriggerBomb);
       this.input.keyboard?.off("keydown-SPACE", this.handleTriggerDash);
       this.input.keyboard?.off("keydown-SHIFT", this.handleTriggerDash);
+      this.input.keyboard?.off("keydown-E", this.handleTriggerBomb);
+      this.input.keyboard?.off("keydown-B", this.handleTriggerBomb);
     };
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
     this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
@@ -591,11 +609,21 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    // 4b. Bombs (touch to detonate; blast power depends on hero)
+    // 4b. Bombs (collect & stack up to 5; detonate on demand)
     if (this.room.state.bombs && typeof this.room.state.bombs.onAdd === "function") {
       this.room.state.bombs.onAdd((bomb: any, id: string) => {
         if (this.bombVisuals.has(id)) return;
-        this.bombVisuals.set(id, this.createBombVisual(bomb));
+        const visual = this.createBombVisual(bomb);
+        this.bombVisuals.set(id, visual);
+        if (typeof bomb.onChange === "function") {
+          bomb.onChange(() => {
+            const nx = Number(bomb.x);
+            const ny = Number(bomb.y);
+            if (Number.isFinite(nx) && Number.isFinite(ny)) {
+              visual.setPosition(nx, ny);
+            }
+          });
+        }
       });
       this.room.state.bombs.onRemove((_bomb: any, id: string) => {
         const visual = this.bombVisuals.get(id);
@@ -606,14 +634,28 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
+    this.room.onMessage("bomb_pickup", (data: unknown) => {
+      if (!data || typeof data !== "object") return;
+      const d = data as Record<string, unknown>;
+      const x = Number(d.x);
+      const y = Number(d.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      this.createHitEffect(x, y, 0xfbbf24);
+      const isLocal = typeof d.playerId === "string" && d.playerId === this.room?.sessionId;
+      if (isLocal) {
+        this.spawnFloatingText(x, y - 16, "+1 💣", "#fbbf24");
+      }
+    });
+
     this.room.onMessage("bomb_blast", (data: unknown) => {
       if (!data || typeof data !== "object") return;
       const d = data as Record<string, unknown>;
       const x = Number(d.x);
       const y = Number(d.y);
       const radius = Number(d.radius);
+      const chain = Boolean(d.chain);
       if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radius)) return;
-      this.createBombBlastEffect(x, y, Math.max(40, Math.min(600, radius)));
+      this.createBombBlastEffect(x, y, Math.max(40, Math.min(600, radius)), chain);
     });
 
     // 5. Obstacles (Rocks, Armored Bunker Walls, Energy Pillars)
@@ -1022,21 +1064,56 @@ export class GameScene extends Phaser.Scene {
     return container;
   }
 
-  private createBombBlastEffect(x: number, y: number, radius: number) {
-    const ring = this.add.circle(x, y, radius, 0xf97316, 0.35);
-    ring.setStrokeStyle(4, 0xfbbf24, 0.9);
+  private spawnFloatingText(x: number, y: number, text: string, color: string) {
+    const label = this.add
+      .text(x, y, text, {
+        fontFamily: "Inter, system-ui, sans-serif",
+        fontSize: "15px",
+        fontStyle: "bold",
+        color,
+        stroke: "#0c0a09",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(35);
+    this.tweens.add({
+      targets: label,
+      y: y - 34,
+      alpha: 0,
+      duration: 720,
+      ease: "Cubic.easeOut",
+      onComplete: () => label.destroy(),
+    });
+  }
+
+  private createBombBlastEffect(x: number, y: number, radius: number, chain: boolean = false) {
+    const core = this.add.circle(x, y, radius * 0.55, 0xfef08a, 0.48);
+    core.setDepth(27);
+    core.setScale(0.2);
+    this.tweens.add({
+      targets: core,
+      scale: 1,
+      alpha: 0,
+      duration: 240,
+      ease: "Cubic.easeOut",
+      onComplete: () => core.destroy(),
+    });
+
+    const ring = this.add.circle(x, y, radius, 0xf97316, 0.34);
+    ring.setStrokeStyle(5, 0xfbbf24, 0.95);
     ring.setDepth(26);
     ring.setScale(0.15);
     this.tweens.add({
       targets: ring,
       scale: 1,
       alpha: 0,
-      duration: 360,
+      duration: 380,
       ease: "Cubic.easeOut",
       onComplete: () => ring.destroy(),
     });
     this.createExplosionEffect(x, y, 0xf97316);
-    this.cameras.main.shake(200, 0.006);
+    this.spawnFloatingText(x, y - 14, chain ? "💥 ZİNCİRLEME!" : "💥 BOOM!", "#fb923c");
+    this.cameras.main.shake(chain ? 260 : 200, chain ? 0.009 : 0.006);
   }
 
   private createHitEffect(x: number, y: number, color: number) {
@@ -1078,6 +1155,7 @@ export class GameScene extends Phaser.Scene {
       kills: number;
       hp: number;
       maxHp: number;
+      bombs: number;
       isDead: boolean;
       respawnTimer: number;
       color: string;
@@ -1105,6 +1183,7 @@ export class GameScene extends Phaser.Scene {
         kills: p.kills || 0,
         hp: p.hp ?? 100,
         maxHp: p.maxHp ?? 100,
+        bombs: Math.max(0, Math.min(5, Number(p.bombs) || 0)),
         isDead: Boolean(p.isDead),
         respawnTimer: p.respawnTimer || 0,
         color: p.color,

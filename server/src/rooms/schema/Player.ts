@@ -15,6 +15,7 @@ export class Player extends Schema {
   @type("number") declare speed: number;
   @type("boolean") declare isDead: boolean;
   @type("number") declare respawnTimer: number;
+  @type("number") declare bombs: number;
 
   // Server-only properties (never exposed or writable by client)
   vx: number = 0;
@@ -26,6 +27,7 @@ export class Player extends Schema {
   dashEndTime: number = 0;
   dashVx: number = 0;
   dashVy: number = 0;
+  lastBombUseTime: number = 0;
   lastChatTime: number = 0;
   lastModeToggleTime: number = 0;
   packetCount: number = 0;
@@ -47,5 +49,6 @@ export class Player extends Schema {
     this.speed = 240;
     this.isDead = false;
     this.respawnTimer = 0;
+    this.bombs = 0;
   }
 }

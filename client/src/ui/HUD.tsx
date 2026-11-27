@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { EventBus } from "../game/EventBus";
 import { useTheme } from "../theme/ThemeContext";
+import { AdSlot } from "../ads/AdSlot";
 
 interface PlayerInfo {
   id: string;
@@ -28,6 +29,7 @@ interface PlayerInfo {
   kills: number;
   hp: number;
   maxHp: number;
+  bombs?: number;
   isDead: boolean;
   respawnTimer: number;
   color: string;
@@ -84,6 +86,7 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
   const [showChat, setShowChat] = useState(() => window.innerWidth >= 768);
   const [copied, setCopied] = useState(false);
   const [dashReadyAt, setDashReadyAt] = useState(0);
+  const [bombReadyAt, setBombReadyAt] = useState(0);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [levelToast, setLevelToast] = useState<{
     level: number;
@@ -111,6 +114,10 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
       setDashReadyAt(Date.now() + (payload?.durationMs || 2200));
       setNowTick(Date.now());
     };
+    const handleBombCooldown = (payload: { durationMs: number }) => {
+      setBombReadyAt(Date.now() + (payload?.durationMs || 550));
+      setNowTick(Date.now());
+    };
 
     let toastTimer: number | undefined;
     const handleLevelUp = (payload: {
@@ -136,6 +143,7 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
     EventBus.on("players-updated", handlePlayersUpdate);
     EventBus.on("game-info-updated", handleGameInfoUpdate);
     EventBus.on("dash-cooldown", handleDashCooldown);
+    EventBus.on("bomb-cooldown", handleBombCooldown);
     EventBus.on("level-up", handleLevelUp);
 
     room.onMessage("chat", (msg: ChatMessage) => {
@@ -165,21 +173,23 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
       EventBus.off("players-updated", handlePlayersUpdate);
       EventBus.off("game-info-updated", handleGameInfoUpdate);
       EventBus.off("dash-cooldown", handleDashCooldown);
+      EventBus.off("bomb-cooldown", handleBombCooldown);
       EventBus.off("level-up", handleLevelUp);
     };
   }, [room]);
 
   useEffect(() => {
-    if (dashReadyAt <= Date.now()) return;
+    const latestEnd = Math.max(dashReadyAt, bombReadyAt);
+    if (latestEnd <= Date.now()) return;
     const id = window.setInterval(() => {
       const t = Date.now();
       setNowTick(t);
-      if (t >= dashReadyAt) {
+      if (t >= latestEnd) {
         window.clearInterval(id);
       }
     }, 100);
     return () => window.clearInterval(id);
-  }, [dashReadyAt]);
+  }, [dashReadyAt, bombReadyAt]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -306,6 +316,7 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
               ? `Bağlantı yenileniyor (${Math.max(1, Math.ceil(localPlayer.respawnTimer))} sn)`
               : `Yeniden doğuluyor... (${Math.max(1, Math.ceil(localPlayer.respawnTimer))} sn)`}
           </div>
+          <AdSlot slotKey="respawn_intermission" style={{ marginTop: "10px" }} />
         </div>
       )}
 
@@ -828,11 +839,12 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
       </div>
       )}
 
-      {/* Controls Hint (Desktop Only — hidden on mobile to keep touch area clear) */}
+      {/* Controls Hint (Desktop Only — positioned above bottom-right action buttons) */}
       {!isMobile && (
         <div
           style={{
             ...styles.controlsHint,
+            bottom: "112px",
             backgroundColor: panelBg,
             border: panelBorder,
             color: panelText,
@@ -864,7 +876,7 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
               <kbd style={styles.kbd}>Otomatik</kbd> : En yakın düşmana ateş eder
             </div>
             <div style={{ marginTop: "3px" }}>
-              <kbd style={styles.kbd}>Space</kbd> : Hızlı Kaçış (Atıl)
+              <kbd style={styles.kbd}>Space</kbd> : Hızlı Kaçış (Atıl) • <kbd style={styles.kbd}>E</kbd> : Bomba Patlat
             </div>
             <div style={{ marginTop: "3px" }}>
               <kbd style={styles.kbd}>Shift + O</kbd> : Açık / Eğlence Modu
@@ -873,60 +885,178 @@ export const HUD: React.FC<HUDProps> = ({ room, onBackToPortal }) => {
         </div>
       )}
 
-      {/* Bottom-Right Thumb Dash / Dodge Button */}
+      {/* Bottom-Right Action Cluster: BOMBA + ATIL */}
+      {!localPlayer?.isDead && (() => {
+        const bombCount = Math.max(0, Math.min(5, localPlayer?.bombs ?? 0));
+        const bombReady = bombCount > 0 && bombReadyAt - nowTick <= 50;
+        const bombCooldownSec = Math.max(0, (bombReadyAt - nowTick) / 1000);
+        const dashReady = dashReadyAt - nowTick <= 50;
+        const dashCooldownSec = Math.max(0, (dashReadyAt - nowTick) / 1000);
+        const btnSize = isMobile ? "72px" : "66px";
+
+        return (
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              right: isMobile ? "18px" : "20px",
+              bottom: isMobile ? "24px" : "20px",
+              display: "flex",
+              alignItems: "flex-end",
+              gap: isMobile ? "14px" : "12px",
+              pointerEvents: "none",
+              zIndex: 40,
+            }}
+          >
+            {/* Detonate Stacked Bomb Button */}
+            <button
+              type="button"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                if (bombReady) EventBus.emit("trigger-bomb");
+              }}
+              style={{
+                position: "relative",
+                width: btnSize,
+                height: btnSize,
+                borderRadius: "50%",
+                pointerEvents: "auto",
+                border: bombReady
+                  ? isOffice
+                    ? "2.5px solid #d97706"
+                    : "2.5px solid #fbbf24"
+                  : "2px solid rgba(148, 163, 184, 0.42)",
+                backgroundColor: bombReady
+                  ? isOffice
+                    ? "rgba(217, 119, 6, 0.94)"
+                    : "rgba(234, 88, 12, 0.9)"
+                  : bombCount > 0
+                    ? "rgba(124, 45, 18, 0.8)"
+                    : "rgba(30, 41, 59, 0.58)",
+                opacity: bombCount > 0 ? 1 : 0.65,
+                color: "#ffffff",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "1px",
+                cursor: bombReady ? "pointer" : "default",
+                boxShadow: bombReady
+                  ? "0 8px 22px rgba(234, 88, 12, 0.45)"
+                  : "0 4px 12px rgba(0, 0, 0, 0.25)",
+                fontFamily: "inherit",
+                touchAction: "none",
+                transition: "transform 0.1s ease, background-color 0.15s ease, opacity 0.15s ease",
+              }}
+              title="Biriken Bombayı Patlat (E veya B)"
+            >
+              {/* Bomb Count Badge */}
+              <span
+                style={{
+                  position: "absolute",
+                  top: "-5px",
+                  right: "-5px",
+                  minWidth: "24px",
+                  height: "24px",
+                  padding: "0 5px",
+                  borderRadius: "999px",
+                  backgroundColor: bombCount > 0 ? "#fbbf24" : "#475569",
+                  color: bombCount > 0 ? "#1c1917" : "#e2e8f0",
+                  border: "2px solid #0f172a",
+                  fontSize: "11px",
+                  fontWeight: 900,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  lineHeight: 1,
+                }}
+              >
+                {bombCount}
+              </span>
+              <span style={{ fontSize: "20px", lineHeight: 1 }}>
+                {bombCooldownSec > 0.05 ? "💥" : "💣"}
+              </span>
+              <span style={{ fontSize: "10px", fontWeight: 900, letterSpacing: "0.04em" }}>
+                {bombCooldownSec > 0.05
+                  ? `${bombCooldownSec.toFixed(1)}s`
+                  : bombCount > 0
+                    ? "PATLAT"
+                    : "BOMBA"}
+              </span>
+              {!isMobile && (
+                <span style={{ fontSize: "9px", opacity: 0.85, fontWeight: 700, lineHeight: 1 }}>
+                  [E]
+                </span>
+              )}
+            </button>
+
+            {/* Dash / Dodge Button */}
+            <button
+              type="button"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                EventBus.emit("trigger-dash");
+              }}
+              style={{
+                width: btnSize,
+                height: btnSize,
+                borderRadius: "50%",
+                pointerEvents: "auto",
+                border: dashReady
+                  ? isOffice
+                    ? "2.5px solid #2563eb"
+                    : "2.5px solid #38bdf8"
+                  : "2px solid rgba(148, 163, 184, 0.45)",
+                backgroundColor: dashReady
+                  ? isOffice
+                    ? "rgba(37, 99, 235, 0.92)"
+                    : "rgba(14, 165, 233, 0.86)"
+                  : "rgba(30, 41, 59, 0.72)",
+                color: "#ffffff",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "1px",
+                cursor: dashReady ? "pointer" : "default",
+                boxShadow: dashReady
+                  ? "0 8px 22px rgba(14, 165, 233, 0.38)"
+                  : "0 4px 12px rgba(0, 0, 0, 0.25)",
+                fontFamily: "inherit",
+                touchAction: "none",
+                transition: "transform 0.1s ease, background-color 0.15s ease",
+              }}
+              title="Hızlı Kaçış / Atıl (Space veya Shift)"
+            >
+              <span style={{ fontSize: "20px", lineHeight: 1 }}>
+                {dashReady ? "💨" : "⏳"}
+              </span>
+              <span style={{ fontSize: "10px", fontWeight: 900, letterSpacing: "0.04em" }}>
+                {dashReady ? "ATIL" : `${dashCooldownSec.toFixed(1)}s`}
+              </span>
+              {!isMobile && (
+                <span style={{ fontSize: "9px", opacity: 0.85, fontWeight: 700, lineHeight: 1 }}>
+                  [SPC]
+                </span>
+              )}
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* Desktop-Only Bottom-Center Mini Ad Strip (Automatically hidden on Mobile/Tablet) */}
       {!localPlayer?.isDead && (
-        <button
-          type="button"
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            EventBus.emit("trigger-dash");
-          }}
+        <AdSlot
+          slotKey="ingame_bottom_bar"
+          dismissible
           style={{
             position: "absolute",
-            right: isMobile ? "22px" : "24px",
-            bottom: isMobile ? "28px" : "116px",
-            width: isMobile ? "72px" : "62px",
-            height: isMobile ? "72px" : "62px",
-            borderRadius: "50%",
-            pointerEvents: "auto",
-            border:
-              dashReadyAt - nowTick <= 50
-                ? isOffice
-                  ? "2.5px solid #2563eb"
-                  : "2.5px solid #38bdf8"
-                : "2px solid rgba(148, 163, 184, 0.45)",
-            backgroundColor:
-              dashReadyAt - nowTick <= 50
-                ? isOffice
-                  ? "rgba(37, 99, 235, 0.92)"
-                  : "rgba(14, 165, 233, 0.86)"
-                : "rgba(30, 41, 59, 0.72)",
-            color: "#ffffff",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "2px",
-            cursor: dashReadyAt - nowTick <= 50 ? "pointer" : "default",
-            boxShadow:
-              dashReadyAt - nowTick <= 50
-                ? "0 8px 22px rgba(14, 165, 233, 0.38)"
-                : "0 4px 12px rgba(0, 0, 0, 0.25)",
-            fontFamily: "inherit",
-            touchAction: "none",
-            zIndex: 40,
+            bottom: "14px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 35,
           }}
-          title="Hızlı Kaçış / Atıl (Space veya Shift)"
-        >
-          <span style={{ fontSize: "19px", lineHeight: 1 }}>
-            {dashReadyAt - nowTick <= 50 ? "💨" : "⏳"}
-          </span>
-          <span style={{ fontSize: "10px", fontWeight: 900, letterSpacing: "0.04em" }}>
-            {dashReadyAt - nowTick <= 50
-              ? "ATIL"
-              : `${Math.max(0, (dashReadyAt - nowTick) / 1000).toFixed(1)}s`}
-          </span>
-        </button>
+        />
       )}
 
       {/* Chat Box (Desktop: always visible bottom-left; Mobile: only when opened from ☰ menu) */}

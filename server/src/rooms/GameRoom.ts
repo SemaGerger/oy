@@ -240,6 +240,21 @@ export class GameRoom extends Room<GameState> {
       player.dashVy = dirY * 640;
     });
 
+    // 6. Server-authoritative Tactical Bomb Detonation (550ms anti-spam cooldown)
+    this.onMessage("use_bomb", (client: Client) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || player.isDead || !this.isPacketAllowed(client, player)) return;
+      if (player.bombs <= 0) return;
+
+      const now = Date.now();
+      if (now - player.lastBombUseTime < 550) return;
+
+      player.bombs = Math.max(0, player.bombs - 1);
+      player.lastBombUseTime = now;
+      player.lastDamageTime = Math.max(player.lastDamageTime, now - 250); // brief blast grace
+      this.detonateBomb(player.x, player.y, player, 0);
+    });
+
     // 50 FPS simulation loop
     this.setSimulationInterval((deltaTime) => this.update(deltaTime), 1000 / 50);
   }
@@ -632,23 +647,94 @@ export class GameRoom extends Room<GameState> {
     this.state.bombs.set(bomb.id, bomb);
   }
 
-  /** Bomb blast: damage + radius scale with the detonating player's hero. */
-  private detonateBomb(x: number, y: number, owner: Player) {
+  /** Tactical bomb blast: core/shockwave falloff, radial knockback, PvP damage & chain reactions. */
+  private detonateBomb(x: number, y: number, owner: Player, chainDepth: number = 0) {
+    if (chainDepth > 4) return;
     const power = getHeroPower(owner.skin);
-    const radius = Math.round(190 * power.blastMult);
-    const damage = Math.round(140 * power.blastMult);
+    const radius = Math.round(210 * power.blastMult);
+    const maxDamage = Math.round(160 * power.blastMult * (chainDepth > 0 ? 1.1 : 1));
+    const coreRadius = radius * 0.55;
+    const now = Date.now();
 
-    const victims: Array<[string, Enemy]> = [];
+    const victims: Array<[string, Enemy, number]> = [];
     this.state.enemies.forEach((enemy, enemyId) => {
       const d = Math.hypot(enemy.x - x, enemy.y - y);
-      if (d <= radius + enemy.radius) victims.push([enemyId, enemy]);
+      if (d <= radius + enemy.radius) victims.push([enemyId, enemy, d]);
     });
-    for (const [enemyId, enemy] of victims) {
-      enemy.hp -= damage;
-      if (enemy.hp <= 0) this.handleEnemyDeath(enemy, enemyId, owner);
+
+    for (const [enemyId, enemy, d] of victims) {
+      const maxReach = Math.max(1, radius + enemy.radius);
+      const falloff =
+        d <= coreRadius
+          ? 1.0
+          : Math.max(0.6, 1 - ((d - coreRadius) / Math.max(1, maxReach - coreRadius)) * 0.4);
+      enemy.hp -= Math.round(maxDamage * falloff);
+      if (enemy.hp <= 0) {
+        this.handleEnemyDeath(enemy, enemyId, owner);
+      } else {
+        // Radial knockback pushes surviving enemies back for tactical crowd control
+        const dx = enemy.x - x;
+        const dy = enemy.y - y;
+        const dist = Math.hypot(dx, dy);
+        const nx = dist > 0.001 ? dx / dist : Math.cos(owner.rotation);
+        const ny = dist > 0.001 ? dy / dist : Math.sin(owner.rotation);
+        const baseKnock = enemy.type === "boss" ? 38 : enemy.type === "tank" ? 68 : 115;
+        const knock = baseKnock * (1 - Math.min(1, d / maxReach) * 0.45);
+        enemy.x += nx * knock;
+        enemy.y += ny * knock;
+        this.resolveObstacleCollision(enemy, enemy.radius);
+        enemy.x = Math.max(enemy.radius, Math.min(this.state.mapWidth - enemy.radius, enemy.x));
+        enemy.y = Math.max(enemy.radius, Math.min(this.state.mapHeight - enemy.radius, enemy.y));
+      }
     }
 
-    this.broadcast("bomb_blast", { x, y, radius });
+    // PvP mode: rival players caught in the blast take balanced damage + knockback
+    if (this.state.gameMode === "pvp") {
+      this.state.players.forEach((other, otherId) => {
+        if (otherId === owner.id || other.isDead) return;
+        if (now - other.lastDamageTime < 400) return;
+        const d = Math.hypot(other.x - x, other.y - y);
+        if (d > radius + 20) return;
+        const falloff =
+          d <= coreRadius
+            ? 1.0
+            : Math.max(0.6, 1 - ((d - coreRadius) / Math.max(1, radius + 20 - coreRadius)) * 0.4);
+        other.hp -= Math.round(maxDamage * 0.45 * falloff);
+        other.lastDamageTime = now;
+        if (other.hp <= 0) {
+          this.killPlayer(other, owner.name);
+          owner.kills += 1;
+          owner.score += 100;
+        } else {
+          const dx = other.x - x;
+          const dy = other.y - y;
+          const dist = Math.hypot(dx, dy);
+          const nx = dist > 0.001 ? dx / dist : 1;
+          const ny = dist > 0.001 ? dy / dist : 0;
+          other.x += nx * 70;
+          other.y += ny * 70;
+          this.resolveObstacleCollision(other, 20);
+          other.x = Math.max(25, Math.min(this.state.mapWidth - 25, other.x));
+          other.y = Math.max(25, Math.min(this.state.mapHeight - 25, other.y));
+        }
+      });
+    }
+
+    // Chain reaction: detonate nearby uncollected ground bombs
+    const chainedBombs: Array<{ id: string; x: number; y: number }> = [];
+    this.state.bombs.forEach((bomb, bombId) => {
+      const d = Math.hypot(bomb.x - x, bomb.y - y);
+      if (d <= radius) {
+        chainedBombs.push({ id: bombId, x: bomb.x, y: bomb.y });
+      }
+    });
+    for (const cb of chainedBombs) {
+      if (!this.state.bombs.has(cb.id)) continue;
+      this.state.bombs.delete(cb.id);
+      this.detonateBomb(cb.x, cb.y, owner, chainDepth + 1);
+    }
+
+    this.broadcast("bomb_blast", { x, y, radius, chain: chainDepth > 0 });
   }
 
   private killPlayer(victim: Player, killerName: string) {
@@ -789,18 +875,36 @@ export class GameRoom extends Room<GameState> {
         }
       });
 
-      // Bombs: touching one detonates it (server-authoritative blast)
-      const touchedBombs: string[] = [];
-      this.state.bombs.forEach((bomb, bombId) => {
-        const bx = player.x - bomb.x;
-        const by = player.y - bomb.y;
-        if (bx * bx + by * by < 36 * 36) touchedBombs.push(bombId);
-      });
-      for (const bombId of touchedBombs) {
-        const bomb = this.state.bombs.get(bombId);
-        if (!bomb) continue;
-        this.state.bombs.delete(bombId);
-        this.detonateBomb(bomb.x, bomb.y, player);
+      // Bombs: collect & stack up to 5 with smooth magnet pull (detonate on demand via use_bomb)
+      if (player.bombs < 5) {
+        const collectedBombs: string[] = [];
+        this.state.bombs.forEach((bomb, bombId) => {
+          const bx = player.x - bomb.x;
+          const by = player.y - bomb.y;
+          const bSq = bx * bx + by * by;
+          if (bSq < 36 * 36) {
+            collectedBombs.push(bombId);
+          } else if (bSq < 95 * 95 && bSq > 1) {
+            const d = Math.sqrt(bSq);
+            bomb.x += (bx / d) * 260 * dt;
+            bomb.y += (by / d) * 260 * dt;
+          }
+        });
+        for (const bombId of collectedBombs) {
+          if (player.bombs >= 5) break;
+          const bomb = this.state.bombs.get(bombId);
+          if (!bomb) continue;
+          const bx = bomb.x;
+          const by = bomb.y;
+          this.state.bombs.delete(bombId);
+          player.bombs = Math.min(5, player.bombs + 1);
+          this.broadcast("bomb_pickup", {
+            playerId: player.id,
+            x: bx,
+            y: by,
+            count: player.bombs,
+          });
+        }
       }
     });
 

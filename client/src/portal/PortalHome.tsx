@@ -24,6 +24,7 @@ import {
   getPlayerProgress,
   isHeroUnlocked,
 } from "../game/heroes";
+import { AdSlot } from "../ads/AdSlot";
 
 interface PortalHomeProps {
   user: AuthUser | null;
@@ -194,6 +195,26 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
           </div>
         </div>
       </header>
+
+      {/* Wide Desktop Only (>= 1360px): Sticky Left & Right Skyscraper Ad Rails */}
+      <AdSlot
+        slotKey="portal_left_rail"
+        style={{
+          position: "fixed",
+          left: "12px",
+          top: "84px",
+          zIndex: 15,
+        }}
+      />
+      <AdSlot
+        slotKey="portal_right_rail"
+        style={{
+          position: "fixed",
+          right: "12px",
+          top: "84px",
+          zIndex: 15,
+        }}
+      />
 
       {/* Main Content */}
       <main style={styles.mainContent}>
@@ -633,6 +654,9 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
           </div>
         </section>
 
+        {/* Responsive Top Banner: 728x90 (Desktop/Tablet) | 320x50 (Mobile Web) */}
+        <AdSlot slotKey="portal_top_banner" />
+
         {/* Active Games Section */}
         <section>
           <div style={styles.sectionHeader}>
@@ -777,6 +801,9 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
             ))}
           </div>
         </section>
+
+        {/* Responsive Mid/Bottom Banner: 728x90 (Desktop/Tablet) | 300x250 (Mobile Web) */}
+        <AdSlot slotKey="portal_mid_banner" />
 
         {/* Semantic SEO Guide & FAQ Section (Helps players discover Sitecont Game on Google) */}
         <section

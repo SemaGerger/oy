@@ -18,6 +18,7 @@ import {
   getPlayerProgress,
   isHeroUnlocked,
 } from "../game/heroes";
+import { AdSlot } from "../ads/AdSlot";
 
 interface LoginScreenProps {
   user: AuthUser;
@@ -395,6 +396,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Responsive Lobby Companion Ad: 300x250 beside card on Desktop | 320x50 below card on Mobile */}
+      <AdSlot slotKey="lobby_companion" style={{ margin: 0 }} />
     </div>
   );
 };
@@ -404,8 +408,12 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
     height: "100%",
     display: "flex",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "center",
+    alignContent: "center",
+    gap: "20px",
+    overflowY: "auto",
     backgroundColor: "#f4f6f9",
     backgroundImage: "radial-gradient(#d8dee9 1.2px, transparent 1.2px)",
     backgroundSize: "24px 24px",

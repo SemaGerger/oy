@@ -128,6 +128,11 @@ export class SoloGameScene extends Phaser.Scene {
   private dashVx = 0;
   private dashVy = 0;
 
+  // Tactical Bomb Inventory state
+  private bombCount = 0;
+  private readonly maxBombs = 5;
+  private lastBombUseTime = 0;
+
   private lastHudEmit = 0;
 
   constructor(difficulty: "medium" | "hard" = "medium", heroId: string = "cyber_cat") {
@@ -216,6 +221,19 @@ export class SoloGameScene extends Phaser.Scene {
     this.createHitEffect(this.playerX, this.playerY, 0x38bdf8);
   };
 
+  private handleTriggerBomb = () => {
+    if (this.isDead || this.isPausedForUnlock || this.bombCount <= 0) return;
+    const now = Date.now();
+    if (now - this.lastBombUseTime < 550) return;
+
+    this.lastBombUseTime = now;
+    this.bombCount = Math.max(0, this.bombCount - 1);
+    this.lastDamageTime = Math.max(this.lastDamageTime, now - 250); // brief blast grace
+    EventBus.emit("bomb-cooldown", { durationMs: 550 });
+    this.detonateBomb(this.playerX, this.playerY, 0);
+    this.emitHudStats();
+  };
+
   create() {
     this.input.addPointer(2);
 
@@ -229,6 +247,8 @@ export class SoloGameScene extends Phaser.Scene {
       }) as any;
       this.input.keyboard.on("keydown-SPACE", this.handleTriggerDash);
       this.input.keyboard.on("keydown-SHIFT", this.handleTriggerDash);
+      this.input.keyboard.on("keydown-E", this.handleTriggerBomb);
+      this.input.keyboard.on("keydown-B", this.handleTriggerBomb);
     }
 
     this.drawBackground();
@@ -354,13 +374,17 @@ export class SoloGameScene extends Phaser.Scene {
 
     EventBus.on("theme-changed", this.handleThemeChanged);
     EventBus.on("trigger-dash", this.handleTriggerDash);
+    EventBus.on("trigger-bomb", this.handleTriggerBomb);
     EventBus.on("resume-after-unlock", handleResumeAfterUnlock);
     const cleanup = () => {
       EventBus.off("theme-changed", this.handleThemeChanged);
       EventBus.off("trigger-dash", this.handleTriggerDash);
+      EventBus.off("trigger-bomb", this.handleTriggerBomb);
       EventBus.off("resume-after-unlock", handleResumeAfterUnlock);
       this.input.keyboard?.off("keydown-SPACE", this.handleTriggerDash);
       this.input.keyboard?.off("keydown-SHIFT", this.handleTriggerDash);
+      this.input.keyboard?.off("keydown-E", this.handleTriggerBomb);
+      this.input.keyboard?.off("keydown-B", this.handleTriggerBomb);
     };
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
     this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
@@ -1025,46 +1049,99 @@ export class SoloGameScene extends Phaser.Scene {
     this.bombs.push({ x: pos.x, y: pos.y, container });
   }
 
-  /** Bomb blast: damage + radius scale with the equipped hero's blastMult. */
-  private detonateBomb(x: number, y: number) {
+  /** Tactical bomb blast: core/shockwave falloff, radial knockback, orb clear & chain reactions. */
+  private detonateBomb(x: number, y: number, chainDepth: number = 0) {
+    if (chainDepth > 4) return;
     const hero = getHeroById(this.heroId);
-    const radius = Math.round(190 * hero.blastMult);
-    const damage = Math.round(140 * hero.blastMult);
+    const radius = Math.round(210 * hero.blastMult);
+    const maxDamage = Math.round(160 * hero.blastMult * (chainDepth > 0 ? 1.1 : 1));
+    const coreRadius = radius * 0.55;
+
+    const core = this.add.circle(x, y, coreRadius, 0xfef08a, 0.48);
+    core.setDepth(27);
+    core.setScale(0.2);
+    this.tweens.add({
+      targets: core,
+      scale: 1,
+      alpha: 0,
+      duration: 240,
+      ease: "Cubic.easeOut",
+      onComplete: () => core.destroy(),
+    });
 
     const ring = this.add.circle(x, y, radius, 0xf97316, 0.35);
-    ring.setStrokeStyle(4, 0xfbbf24, 0.9);
+    ring.setStrokeStyle(5, 0xfbbf24, 0.95);
     ring.setDepth(26);
     ring.setScale(0.15);
     this.tweens.add({
       targets: ring,
       scale: 1,
       alpha: 0,
-      duration: 360,
+      duration: 380,
       ease: "Cubic.easeOut",
       onComplete: () => ring.destroy(),
     });
     this.createDeathBurst(x, y, 0xf97316, 14);
-    this.cameras.main.shake(200, 0.008);
+    this.cameras.main.shake(chainDepth > 0 ? 260 : 200, chainDepth > 0 ? 0.01 : 0.008);
 
     for (let j = this.enemies.length - 1; j >= 0; j--) {
       const e = this.enemies[j];
-      if (Math.hypot(e.x - x, e.y - y) > radius + e.radius) continue;
-      e.hp -= damage;
+      const d = Math.hypot(e.x - x, e.y - y);
+      const maxReach = Math.max(1, radius + e.radius);
+      if (d > maxReach) continue;
+
+      const falloff =
+        d <= coreRadius
+          ? 1.0
+          : Math.max(0.6, 1 - ((d - coreRadius) / Math.max(1, maxReach - coreRadius)) * 0.4);
+      e.hp -= Math.round(maxDamage * falloff);
       e.hpBarFill.width = e.radius * 2 * Math.max(0, e.hp / e.maxHp);
       if (e.hp <= 0) {
         this.onEnemyKilled(e);
         this.enemies.splice(j, 1);
+      } else {
+        // Radial knockback pushes surviving enemies back for tactical crowd control
+        const dx = e.x - x;
+        const dy = e.y - y;
+        const nx = d > 0.001 ? dx / d : Math.cos(this.playerRot);
+        const ny = d > 0.001 ? dy / d : Math.sin(this.playerRot);
+        const baseKnock = e.type === "boss" ? 38 : e.type === "tank" ? 68 : 115;
+        const knock = baseKnock * (1 - Math.min(1, d / maxReach) * 0.45);
+        e.x += nx * knock;
+        e.y += ny * knock;
+        this.resolveObstacleCollision(e, e.radius);
+        e.x = Math.max(e.radius, Math.min(this.mapW - e.radius, e.x));
+        e.y = Math.max(e.radius, Math.min(this.mapH - e.radius, e.y));
+        e.container.setPosition(e.x, e.y);
       }
     }
 
+    // Vaporize enemy ranged orbs within extended shockwave radius
+    const orbClearRadius = radius * 1.1;
     for (let k = this.enemyBullets.length - 1; k >= 0; k--) {
       const eb = this.enemyBullets[k];
-      if (Math.hypot(eb.x - x, eb.y - y) <= radius) {
+      if (Math.hypot(eb.x - x, eb.y - y) <= orbClearRadius) {
+        this.createHitEffect(eb.x, eb.y, 0xfbbf24);
         eb.container.destroy();
         this.enemyBullets.splice(k, 1);
       }
     }
-    this.spawnFloatingText(x, y - 10, "💥 BOOM!", "#fb923c");
+
+    // Chain reaction: detonate uncollected ground bombs caught inside the blast
+    const chainedCoords: Array<{ x: number; y: number }> = [];
+    for (let bIdx = this.bombs.length - 1; bIdx >= 0; bIdx--) {
+      const gb = this.bombs[bIdx];
+      if (Math.hypot(gb.x - x, gb.y - y) <= radius) {
+        chainedCoords.push({ x: gb.x, y: gb.y });
+        gb.container.destroy();
+        this.bombs.splice(bIdx, 1);
+      }
+    }
+    for (const c of chainedCoords) {
+      this.detonateBomb(c.x, c.y, chainDepth + 1);
+    }
+
+    this.spawnFloatingText(x, y - 12, chainDepth > 0 ? "💥 ZİNCİRLEME!" : "💥 BOOM!", "#fb923c");
   }
 
   private awardXp(amount: number) {
@@ -1096,6 +1173,8 @@ export class SoloGameScene extends Phaser.Scene {
       maxHp: this.playerMaxHp,
       kills: this.kills,
       score: this.score,
+      bombs: this.bombCount,
+      maxBombs: this.maxBombs,
       isDead: this.isDead,
       respawnTimer: this.respawnTimer,
       difficulty: this.difficulty,
@@ -1256,15 +1335,28 @@ export class SoloGameScene extends Phaser.Scene {
       }
     }
 
-    // Bombs: touch one to detonate it (blast power depends on the hero)
+    // Bombs: collect & stack up to maxBombs with smooth magnet pull (detonate on demand)
     if (!this.isDead) {
       for (let i = this.bombs.length - 1; i >= 0; i--) {
         const bomb = this.bombs[i];
         bomb.container.setScale(1 + Math.sin(time * 0.008 + i) * 0.08);
-        if ((this.playerX - bomb.x) ** 2 + (this.playerY - bomb.y) ** 2 < 36 * 36) {
+        if (this.bombCount >= this.maxBombs) continue;
+
+        const bdx = this.playerX - bomb.x;
+        const bdy = this.playerY - bomb.y;
+        const bSq = bdx * bdx + bdy * bdy;
+        if (bSq < 36 * 36) {
           this.bombs.splice(i, 1);
           bomb.container.destroy();
-          this.detonateBomb(bomb.x, bomb.y);
+          this.bombCount = Math.min(this.maxBombs, this.bombCount + 1);
+          this.createHitEffect(bomb.x, bomb.y, 0xfbbf24);
+          this.spawnFloatingText(bomb.x, bomb.y - 16, `+1 💣`, "#fbbf24");
+          this.emitHudStats();
+        } else if (bSq < 95 * 95 && bSq > 1) {
+          const d = Math.sqrt(bSq);
+          bomb.x += (bdx / d) * 260 * dt;
+          bomb.y += (bdy / d) * 260 * dt;
+          bomb.container.setPosition(bomb.x, bomb.y);
         }
       }
     }

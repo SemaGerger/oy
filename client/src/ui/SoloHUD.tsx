@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Flame, Heart, Skull, Sun, Moon, Trophy, Users, Menu, X } from "lucide-react";
 import { EventBus } from "../game/EventBus";
 import { useTheme } from "../theme/ThemeContext";
+import { AdSlot } from "../ads/AdSlot";
 
 interface SoloStats {
   wave: number;
@@ -10,6 +11,8 @@ interface SoloStats {
   maxHp: number;
   kills: number;
   score: number;
+  bombs?: number;
+  maxBombs?: number;
   isDead: boolean;
   respawnTimer: number;
   difficulty?: "medium" | "hard";
@@ -31,6 +34,7 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dashReadyAt, setDashReadyAt] = useState(0);
+  const [bombReadyAt, setBombReadyAt] = useState(0);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [levelToast, setLevelToast] = useState<{
     level: number;
@@ -46,6 +50,8 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
     maxHp: 100,
     kills: 0,
     score: 0,
+    bombs: 0,
+    maxBombs: 5,
     isDead: false,
     respawnTimer: 0,
     difficulty: "medium",
@@ -87,6 +93,11 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
       setNowTick(Date.now());
     };
 
+    const onBombCooldown = (payload: { durationMs: number }) => {
+      setBombReadyAt(Date.now() + (payload?.durationMs || 550));
+      setNowTick(Date.now());
+    };
+
     let toastTimer: number | undefined;
     const onLevelUp = (payload: {
       level: number;
@@ -113,26 +124,29 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
 
     EventBus.on("solo-stats-updated", onStats);
     EventBus.on("dash-cooldown", onDashCooldown);
+    EventBus.on("bomb-cooldown", onBombCooldown);
     EventBus.on("level-up", onLevelUp);
     return () => {
       if (toastTimer) window.clearTimeout(toastTimer);
       EventBus.off("solo-stats-updated", onStats);
       EventBus.off("dash-cooldown", onDashCooldown);
+      EventBus.off("bomb-cooldown", onBombCooldown);
       EventBus.off("level-up", onLevelUp);
     };
   }, []);
 
   useEffect(() => {
-    if (dashReadyAt <= Date.now()) return;
+    const latestEnd = Math.max(dashReadyAt, bombReadyAt);
+    if (latestEnd <= Date.now()) return;
     const id = window.setInterval(() => {
       const t = Date.now();
       setNowTick(t);
-      if (t >= dashReadyAt) {
+      if (t >= latestEnd) {
         window.clearInterval(id);
       }
     }, 100);
     return () => window.clearInterval(id);
-  }, [dashReadyAt]);
+  }, [dashReadyAt, bombReadyAt]);
 
   const handleCloseUnlockModal = () => {
     setLevelToast(null);
@@ -145,6 +159,9 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
   const isHard = stats.difficulty === "hard";
   const dashRemainingSec = Math.max(0, (dashReadyAt - nowTick) / 1000);
   const dashReady = dashRemainingSec <= 0.05;
+  const bombCount = Math.max(0, Math.min(stats.maxBombs ?? 5, stats.bombs ?? 0));
+  const bombRemainingSec = Math.max(0, (bombReadyAt - nowTick) / 1000);
+  const bombReady = bombCount > 0 && bombRemainingSec <= 0.05;
 
   return (
     <div style={styles.overlay}>
@@ -335,6 +352,7 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
           <div style={{ fontSize: "13px", color: isOffice ? "#475569" : "#d6d3d1" }}>
             {Math.max(1, Math.ceil(stats.respawnTimer))} saniye içinde devam ediliyor...
           </div>
+          <AdSlot slotKey="respawn_intermission" style={{ marginTop: "10px" }} />
         </div>
       )}
 
@@ -626,54 +644,167 @@ export const SoloHUD: React.FC<SoloHUDProps> = ({
         </div>
       )}
 
-      {/* Bottom-Right Thumb Dash / Dodge Button */}
+      {/* Bottom-Right Action Cluster: BOMBA + ATIL */}
       {!stats.isDead && (
-        <button
-          type="button"
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            EventBus.emit("trigger-dash");
-          }}
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
           style={{
             position: "absolute",
-            right: isMobile ? "22px" : "28px",
-            bottom: isMobile ? "28px" : "28px",
-            width: isMobile ? "72px" : "68px",
-            height: isMobile ? "72px" : "68px",
-            borderRadius: "50%",
-            pointerEvents: "auto",
-            border: dashReady
-              ? isOffice
-                ? "2.5px solid #2563eb"
-                : "2.5px solid #38bdf8"
-              : "2px solid rgba(148, 163, 184, 0.45)",
-            backgroundColor: dashReady
-              ? isOffice
-                ? "rgba(37, 99, 235, 0.92)"
-                : "rgba(14, 165, 233, 0.86)"
-              : "rgba(30, 41, 59, 0.72)",
-            color: "#ffffff",
+            right: isMobile ? "18px" : "24px",
+            bottom: isMobile ? "24px" : "24px",
             display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "2px",
-            cursor: dashReady ? "pointer" : "default",
-            boxShadow: dashReady
-              ? "0 8px 22px rgba(14, 165, 233, 0.38)"
-              : "0 4px 12px rgba(0, 0, 0, 0.25)",
-            fontFamily: "inherit",
-            touchAction: "none",
+            alignItems: "flex-end",
+            gap: isMobile ? "14px" : "12px",
+            pointerEvents: "none",
             zIndex: 40,
-            transition: "transform 0.1s ease, background-color 0.15s ease",
           }}
-          title="Hızlı Kaçış / Atıl (Space veya Shift)"
         >
-          <span style={{ fontSize: "20px", lineHeight: 1 }}>{dashReady ? "💨" : "⏳"}</span>
-          <span style={{ fontSize: "10px", fontWeight: 900, letterSpacing: "0.04em" }}>
-            {dashReady ? "ATIL" : `${dashRemainingSec.toFixed(1)}s`}
-          </span>
-        </button>
+          {/* Detonate Stacked Bomb Button */}
+          <button
+            type="button"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              if (bombReady) EventBus.emit("trigger-bomb");
+            }}
+            style={{
+              position: "relative",
+              width: isMobile ? "72px" : "68px",
+              height: isMobile ? "72px" : "68px",
+              borderRadius: "50%",
+              pointerEvents: "auto",
+              border: bombReady
+                ? isOffice
+                  ? "2.5px solid #d97706"
+                  : "2.5px solid #fbbf24"
+                : "2px solid rgba(148, 163, 184, 0.42)",
+              backgroundColor: bombReady
+                ? isOffice
+                  ? "rgba(217, 119, 6, 0.94)"
+                  : "rgba(234, 88, 12, 0.9)"
+                : bombCount > 0
+                  ? "rgba(124, 45, 18, 0.8)"
+                  : "rgba(30, 41, 59, 0.58)",
+              opacity: bombCount > 0 ? 1 : 0.65,
+              color: "#ffffff",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "1px",
+              cursor: bombReady ? "pointer" : "default",
+              boxShadow: bombReady
+                ? "0 8px 22px rgba(234, 88, 12, 0.45)"
+                : "0 4px 12px rgba(0, 0, 0, 0.25)",
+              fontFamily: "inherit",
+              touchAction: "none",
+              transition: "transform 0.1s ease, background-color 0.15s ease, opacity 0.15s ease",
+            }}
+            title="Biriken Bombayı Patlat (E veya B)"
+          >
+            {/* Bomb Count Badge */}
+            <span
+              style={{
+                position: "absolute",
+                top: "-5px",
+                right: "-5px",
+                minWidth: "24px",
+                height: "24px",
+                padding: "0 5px",
+                borderRadius: "999px",
+                backgroundColor: bombCount > 0 ? "#fbbf24" : "#475569",
+                color: bombCount > 0 ? "#1c1917" : "#e2e8f0",
+                border: "2px solid #0f172a",
+                fontSize: "11px",
+                fontWeight: 900,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                lineHeight: 1,
+              }}
+            >
+              {bombCount}
+            </span>
+            <span style={{ fontSize: "20px", lineHeight: 1 }}>
+              {bombRemainingSec > 0.05 ? "💥" : "💣"}
+            </span>
+            <span style={{ fontSize: "10px", fontWeight: 900, letterSpacing: "0.04em" }}>
+              {bombRemainingSec > 0.05
+                ? `${bombRemainingSec.toFixed(1)}s`
+                : bombCount > 0
+                  ? "PATLAT"
+                  : "BOMBA"}
+            </span>
+            {!isMobile && (
+              <span style={{ fontSize: "9px", opacity: 0.85, fontWeight: 700, lineHeight: 1 }}>
+                [E]
+              </span>
+            )}
+          </button>
+
+          {/* Dash / Dodge Button */}
+          <button
+            type="button"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              EventBus.emit("trigger-dash");
+            }}
+            style={{
+              width: isMobile ? "72px" : "68px",
+              height: isMobile ? "72px" : "68px",
+              borderRadius: "50%",
+              pointerEvents: "auto",
+              border: dashReady
+                ? isOffice
+                  ? "2.5px solid #2563eb"
+                  : "2.5px solid #38bdf8"
+                : "2px solid rgba(148, 163, 184, 0.45)",
+              backgroundColor: dashReady
+                ? isOffice
+                  ? "rgba(37, 99, 235, 0.92)"
+                  : "rgba(14, 165, 233, 0.86)"
+                : "rgba(30, 41, 59, 0.72)",
+              color: "#ffffff",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "1px",
+              cursor: dashReady ? "pointer" : "default",
+              boxShadow: dashReady
+                ? "0 8px 22px rgba(14, 165, 233, 0.38)"
+                : "0 4px 12px rgba(0, 0, 0, 0.25)",
+              fontFamily: "inherit",
+              touchAction: "none",
+              transition: "transform 0.1s ease, background-color 0.15s ease",
+            }}
+            title="Hızlı Kaçış / Atıl (Space veya Shift)"
+          >
+            <span style={{ fontSize: "20px", lineHeight: 1 }}>{dashReady ? "💨" : "⏳"}</span>
+            <span style={{ fontSize: "10px", fontWeight: 900, letterSpacing: "0.04em" }}>
+              {dashReady ? "ATIL" : `${dashRemainingSec.toFixed(1)}s`}
+            </span>
+            {!isMobile && (
+              <span style={{ fontSize: "9px", opacity: 0.85, fontWeight: 700, lineHeight: 1 }}>
+                [SPC]
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Desktop-Only Bottom-Center Mini Ad Strip (Automatically hidden on Mobile/Tablet) */}
+      {!stats.isDead && (
+        <AdSlot
+          slotKey="ingame_bottom_bar"
+          dismissible
+          style={{
+            position: "absolute",
+            bottom: "14px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 35,
+          }}
+        />
       )}
     </div>
   );
